@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import { UploadCloud, Loader2, CheckCircle2, AlertCircle, Edit3, Database } from "lucide-react";
-import { extractTextFromPDF } from "@/lib/pdf-extractor";
 import { supabase } from "@/lib/supabase";
 
 export default function ResumeUploader() {
@@ -28,35 +27,44 @@ export default function ResumeUploader() {
     }
   };
 
-  const processResume = async () => {
-    if (!file) return;
+  const processResume = async (fileToUpload: File) => {
     try {
-      setStatus("extracting");
-      const extractedText = await extractTextFromPDF(file);
-      if (!extractedText || extractedText.length < 10) throw new Error("Could not extract readable text.");
-      
       setStatus("parsing");
-      const response = await fetch("/api/parse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resumeText: extractedText }),
+      // 1. Create a proper FormData object
+      const formData = new FormData();
+      formData.append('file', fileToUpload);
+
+      // 2. Make the fetch call WITHOUT manual Content-Type headers
+      const response = await fetch('/api/parse', {
+        method: 'POST',
+        body: formData, 
       });
 
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
+      
+      if (!response.ok) throw new Error(result.details || result.error);
 
-      // Merge AI data with our expanded state structure
+      // 3. Update state with AI data merged into F1 structure
       setParsedData({
-        ...result.data,
-        nationality: result.data.nationality || "",
-        passport: result.data.passport || "",
-        dob: result.data.dob || "",
+        name: result.fullName || "",
+        email: result.email || "",
+        phone: result.phone || "",
+        currentRole: "",
+        country: "",
+        nationality: "",
+        passport: "",
+        dob: "",
         destination: "",
-        additionalInfo: ""
+        experienceYears: result.experienceYears || 0,
+        education: "",
+        skills: result.skills || [],
+        visaTrackRecommendation: "H-1B Track",
+        additionalInfo: result.summary || ""
       });
+      
       setStatus("success");
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error("Upload failed:", error);
       setStatus("error");
     }
   };
@@ -65,15 +73,13 @@ export default function ResumeUploader() {
   const validateForm = (dataToValidate: any) => {
     const errors: any = {};
     
-    // Email Validation (Basic Regex)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (dataToValidate.email && !emailRegex.test(dataToValidate.email)) {
       errors.email = "Invalid email format.";
     }
 
-    // Phone Validation (Strips everything but numbers, checks if >= 10)
     const digitsOnly = (dataToValidate.phone || "").replace(/\D/g, '');
-    if (dataToValidate.phone && digitsOnly.length < 10) {
+    if (dataToValidate.phone && digitsOnly.length > 0 && digitsOnly.length < 10) {
       errors.phone = "Phone number must be at least 10 digits.";
     }
 
@@ -83,7 +89,7 @@ export default function ResumeUploader() {
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm(manualData)) return; // Stop if validation fails
+    if (!validateForm(manualData)) return; 
 
     setParsedData({
       name: manualData.name,
@@ -104,10 +110,9 @@ export default function ResumeUploader() {
     setStatus("success");
   };
 
-  // Save to the upgraded F1 Database Schema
   const handleSaveToVault = async () => {
     if (!parsedData) return;
-    if (!validateForm(parsedData)) return; // Re-validate before DB save
+    if (!validateForm(parsedData)) return; 
     
     setStatus("saving");
     try {
@@ -121,13 +126,13 @@ export default function ResumeUploader() {
             country: parsedData.country,
             nationality: parsedData.nationality,
             passport_number: parsedData.passport,
-            dob: parsedData.dob || null, // Handle empty dates safely
+            dob: parsedData.dob || null, 
             destination_country: parsedData.destination,
             skills: parsedData.skills || [],
             experience_years: parsedData.experienceYears,
             education: parsedData.education,
             visa_track_recommendation: parsedData.visaTrackRecommendation,
-            additional_info: { notes: parsedData.additionalInfo }, // Saved as JSONB
+            additional_info: { notes: parsedData.additionalInfo }, 
             status: "AI Parsed"
           }]);
 
@@ -142,7 +147,6 @@ export default function ResumeUploader() {
   return (
     <div className="w-full max-w-3xl mx-auto p-8 bg-white rounded-2xl shadow-xl max-h-[85vh] overflow-y-auto border border-slate-100">
       
-      {/* Mode Toggle */}
       <div className="flex bg-slate-100 p-1 rounded-xl mb-8 w-full max-w-[260px] mx-auto shadow-inner">
         <button onClick={() => setMode("ai")} className={`flex-1 text-xs font-bold py-2 rounded-lg transition-all ${mode === "ai" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
           AI Parsing
@@ -157,7 +161,7 @@ export default function ResumeUploader() {
           {mode === "ai" ? "Upload Candidate Profile" : "Manual Bio-Data Entry"}
         </h3>
         <p className="text-sm text-slate-500 font-medium mt-1">
-          {mode === "ai" ? "Llama 3.1 will extract all F1 required fields." : "Bypass AI and enter all F1 fields directly."}
+          {mode === "ai" ? "Gemini 1.5 will extract all F1 required fields." : "Bypass AI and enter all F1 fields directly."}
         </p>
       </div>
 
@@ -172,7 +176,11 @@ export default function ResumeUploader() {
           </div>
 
           {(status === "idle" || status === "extracting" || status === "parsing" || status === "error") && (
-            <button onClick={processResume} disabled={!file || status === "extracting" || status === "parsing"} className="w-full mt-6 py-3 px-4 bg-slate-900 hover:bg-black disabled:bg-slate-200 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm">
+            <button 
+              onClick={() => file && processResume(file)} 
+              disabled={!file || status === "extracting" || status === "parsing"} 
+              className="w-full mt-6 py-3 px-4 bg-slate-900 hover:bg-black disabled:bg-slate-200 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+            >
               {status === "idle" && "Extract Bio-Data"}
               {status === "extracting" && <><Loader2 className="w-4 h-4 animate-spin" /> Reading Document...</>}
               {status === "parsing" && <><Loader2 className="w-4 h-4 animate-spin" /> AI Processing F1 Fields...</>}
@@ -202,7 +210,6 @@ export default function ResumeUploader() {
               {validationErrors.phone && <p className="text-[10px] text-red-600 font-bold mt-1">{validationErrors.phone}</p>}
             </div>
             
-            {/* NEW F1 FIELDS */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Date of Birth</label>
               <input type="date" value={manualData.dob} onChange={e => setManualData({...manualData, dob: e.target.value})} className="w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-slate-900 transition-all" />
@@ -260,7 +267,6 @@ export default function ResumeUploader() {
         </form>
       )}
 
-      {/* Result Preview & Save Action */}
       {(status === "success" || status === "saving" || status === "saved") && parsedData && (
         <div className="mt-8 space-y-4 pt-6 border-t border-slate-100">
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
@@ -269,7 +275,6 @@ export default function ResumeUploader() {
               <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Ready for Vault</h4>
             </div>
             
-            {/* Show validation errors here if they exist from AI parse */}
             {Object.keys(validationErrors).length > 0 && (
               <div className="mb-3 p-3 bg-red-50 border border-red-100 rounded-lg">
                 <p className="text-xs font-bold text-red-700 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Fix data before saving:</p>
