@@ -1,71 +1,69 @@
-import { NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { NextResponse } from 'next/server';
 
-export const maxDuration = 60; 
-export const dynamic = 'force-dynamic';
-// Initialize the Groq client with your API key
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+// Initialize the Gemini API (Ensure you add GEMINI_API_KEY to your .env.local)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-export async function POST(request: Request) {
+// Highly optimized prompt to minimize tokens
+const SYSTEM_PROMPT = `
+You are a strict, highly efficient ATS data extraction engine.
+Extract the following candidate details from the provided resume document.
+Return ONLY a valid JSON object matching the exact schema below. Do not include markdown blocks, explanations, or any extra text. If a field is missing, return null.
+
+{
+  "fullName": "Full Name",
+  "email": "Email Address",
+  "phone": "Phone Number",
+  "skills": ["Skill 1", "Skill 2", "Skill 3"],
+  "experienceYears": 0,
+  "summary": "A concise 2-sentence professional summary."
+}
+`;
+
+export async function POST(req: Request) {
   try {
-    const { resumeText } = await request.json();
+    // 1. Get the uploaded PDF file from the request
+    const formData = await req.formData();
+    const file = formData.get('file') as File;
 
-    if (!resumeText) {
-      return NextResponse.json({ error: "No resume text provided" }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ error: 'No PDF file provided.' }, { status: 400 });
     }
 
-    // Call Groq API using Llama 3 with explicit JSON schema instructions
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert enterprise HR parser specializing in global tech talent and immigration compliance. 
-          Analyze the raw resume text provided and extract the data into a perfectly structured JSON object. 
-          
-          You MUST respond with a single, valid JSON object matching this exact structure:
-          {
-            "name": "Full Name",
-            "email": "Email Address",
-            "phone": "Phone Number",
-            "dob": "YYYY-MM-DD if found, else empty",
-            "nationality": "Nationality if stated, else empty",
-            "passport": "Passport number if stated, else empty",
-            "currentRole": "Job Title",
-            "country": "Inferred or stated current country of residence",
-            "skills": ["Skill1", "Skill2", "Skill3"],
-            "experienceYears": 5,
-            "education": "Highest degree obtained and university",
-            "visaTrackRecommendation": "H-1B Track, L-1 Track, O-1A Track, or EB-2 NIW based on seniority and background"
-          }
-          Do not include any introductory remarks, markdown code blocks, or explanatory text. Return ONLY the raw JSON string.`,
-        },
-        {
-          role: "user",
-          content: `Here is the raw text of the resume to parse:\n\n${resumeText}`,
-        },
-      ],
-      // Use Llama 3 8b or 70b depending on your speed needs (8b is lightning-fast and great for structured text)
-      model: "llama-3.1-8b-instant", 
-      temperature: 0.1, 
-      response_format: { type: "json_object" },
+    // 2. Convert the file into a Base64 string for Gemini
+    const arrayBuffer = await file.arrayBuffer();
+    const base64Data = Buffer.from(arrayBuffer).toString('base64');
+
+    // 3. Configure the Gemini 1.5 Flash model
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-1.5-flash',
+      generationConfig: {
+        // Enforce JSON output to prevent UI crashes and save tokens
+        responseMimeType: "application/json",
+      }
     });
 
-    const responseContent = chatCompletion.choices[0]?.message?.content;
+    // 4. Send the PDF and the Prompt to Gemini
+    const result = await model.generateContent([
+      SYSTEM_PROMPT,
+      {
+        inlineData: {
+          data: base64Data,
+          mimeType: 'application/pdf',
+        },
+      },
+    ]);
 
-    if (!responseContent) {
-      throw new Error("Empty response received from Groq AI engine");
-    }
+    // 5. Parse the strictly formatted JSON response
+    const rawText = result.response.text();
+    const parsedData = JSON.parse(rawText);
 
-    // Parse the string into a clean object to return to the frontend
-    const parsedData = JSON.parse(responseContent);
+    return NextResponse.json(parsedData, { status: 200 });
 
-    return NextResponse.json({ success: true, data: parsedData });
   } catch (error: any) {
-    console.error("Groq Parsing Error:", error);
+    console.error("Gemini Parsing Error:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to process resume with AI" },
+      { error: 'Failed to process resume', details: error.message },
       { status: 500 }
     );
   }
