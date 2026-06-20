@@ -5,7 +5,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 const SYSTEM_PROMPT = `
 You are a strict ATS data extraction engine.
-Extract the following candidate details from the provided resume document.
+Extract candidate details from the provided resume/document. Look very carefully for any passport number, passport expiry date, date of birth, and nationality/citizenship, as these are critical.
 Return ONLY a valid JSON object matching the exact schema below. Do not include markdown blocks, explanations, or any extra text. If a field is missing, return null.
 
 {
@@ -14,7 +14,11 @@ Return ONLY a valid JSON object matching the exact schema below. Do not include 
   "phone": "Phone Number",
   "skills": ["Skill 1", "Skill 2", "Skill 3"],
   "experienceYears": 0,
-  "summary": "A concise 2-sentence professional summary."
+  "summary": "A concise 2-sentence professional summary.",
+  "dob": "Date of Birth (YYYY-MM-DD format if available, otherwise textual representation or null)",
+  "nationality": "Nationality / Country of Citizenship (e.g. Indian, British, etc. or null)",
+  "passportNumber": "Passport Number (alphanumeric, e.g. Z1234567, or null)",
+  "passportExpiry": "Passport Expiry Date (YYYY-MM-DD format or null)"
 }
 `;
 

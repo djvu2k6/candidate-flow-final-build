@@ -2,9 +2,11 @@ import { supabase } from "./supabase";
 
 export const logAction = async (action: string, details: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    const userName = user?.email || "System/Visitor";
     await supabase.from("audit_logs").insert([
       {
-        user_name: "Admin User", // In the future, pull this from Supabase Auth!
+        user_name: userName,
         action: action,
         details: details
       }
