@@ -20,7 +20,6 @@ export default function CandidateEditor({ candidate, isOpen, onClose, onRefresh 
         email: "",
         phone: "",
         dob: "",
-        nationality: "",
         passport_number: "",
         passport_expiry: "",
         gender: "",
@@ -45,7 +44,6 @@ export default function CandidateEditor({ candidate, isOpen, onClose, onRefresh 
                 email: candidate.email || "",
                 phone: candidate.phone || "",
                 dob: candidate.dob || "",
-                nationality: candidate.nationality || "",
                 passport_number: candidate.passport_number || "",
                 passport_expiry: candidate.additional_info?.passport_expiry || candidate.passport_expiry || "",
                 gender: candidate.gender || "",
@@ -89,7 +87,6 @@ export default function CandidateEditor({ candidate, isOpen, onClose, onRefresh 
                 email: formData.email,
                 phone: formData.phone,
                 dob: formData.dob || null,
-                nationality: formData.nationality,
                 passport_number: formData.passport_number,
                 passport_expiry: formData.passport_expiry || null,
                 gender: formData.gender || null,
@@ -267,15 +264,7 @@ export default function CandidateEditor({ candidate, isOpen, onClose, onRefresh 
                                     className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600/50 outline-none animate-all"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Nationality</label>
-                                <input
-                                    type="text"
-                                    value={formData.nationality}
-                                    onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
-                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600/50 outline-none animate-all"
-                                />
-                            </div>
+                            
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>

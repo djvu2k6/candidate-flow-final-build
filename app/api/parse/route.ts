@@ -1,35 +1,49 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 
+// CRITICAL FIX: Allows Next.js/Vercel up to 60 seconds to process massive 15-page PDFs
+export const maxDuration = 60;
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 const SYSTEM_PROMPT = `
-You are an expert document parser for an immigration agency.
-You will receive a bio-data document — it may be a typed PDF, a scanned image, a form, or a free-form document. Layouts vary widely. Some may have typos, inconsistent formatting, or missing fields.
+You are an expert document analyst for an immigration agency. 
+You will receive a multi-page bio-data package — a single PDF containing multiple documents merged together. This may include any combination of:
+- A bio-data summary sheet (name, DOB, passport details, skills)
+- Passport pages (photo page, details page)
+- Birth certificate
+- Education certificates / marksheets
+- Experience letters
+- Medical certificates
+- Police clearance certificates
+- Any other supporting documents
 
-Your job: extract every possible field you can find. Be flexible — field labels may differ (e.g. "D.O.B", "Birth Date", "Date of Birth" are all the same). Infer intelligently.
+Your job: scan ALL pages thoroughly and extract the following fields by pulling from whichever page contains that information. Cross-reference across pages. If there's a conflict, prefer the passport as the source of truth for identity fields.
 
-Return ONLY a raw JSON object — no markdown, no backticks, no explanation. If a field is not found, return null for that field.
+Return ONLY a raw JSON object — no markdown, no backticks, no explanation. If a field is not found anywhere in the document, return null.
 
 {
-  "fullName": "Full legal name of the candidate",
+  "fullName": "Full legal name exactly as it appears on the passport or bio-data sheet",
   "email": "Email address or null",
-  "phone": "Phone number including country code if present, or null",
+  "phone": "Phone number including country code (often +91 or +972) if visible, or null",
+  "dob": "Date of birth in YYYY-MM-DD format. Cross-check between birth certificate and passport. If conflict, prefer passport.",
+  "gender": "Male / Female / Other — from any document",
+  "passportNumber": "Passport number — alphanumeric, usually 8-9 characters. Extract from passport page.",
+  "passportExpiry": "Passport expiry date in YYYY-MM-DD format — from passport page",
   "skills": ["skill1", "skill2"],
   "experienceYears": 0,
-  "summary": "1-2 sentence summary of the candidate's profile based on what you read",
-  "dob": "Date of birth in YYYY-MM-DD format. If only partial (e.g. year only), return what you have as a string",
-  "nationality": "Nationality or country of citizenship (e.g. Indian, Nepali). Look for 'Nationality', 'Citizenship', 'Country' labels",
-  "passportNumber": "Passport number — usually alphanumeric like A1234567 or Z9876543. Look carefully even in tables or handwritten sections",
-  "passportExpiry": "Passport expiry date in YYYY-MM-DD format or null",
-  "gender": "Male / Female / Other or null"
+  "education": "Highest qualification found across all education certificates. e.g. 'Diploma in Electrical Engineering, Kerala Technical University, 2018'",
+  "summary": "2-sentence professional summary based on everything you read across all documents",
+  "documentsFound": ["list", "of", "document", "types", "you", "detected", "in", "this", "PDF"]
 }
 
 Critical rules:
-- Never hallucinate data. If genuinely not found, return null.
-- Dates must be YYYY-MM-DD. If month/day unclear, best-guess from context.
-- Passport numbers are usually 8-9 alphanumeric characters.
-- Skills can be inferred from job roles or certifications mentioned if no explicit skills list exists.
+- Scan every single page — do not stop after the first page.
+- Never hallucinate. If genuinely not found after checking all pages, return null.
+- Do NOT guess the passport expiry date. If it is blurry or illegible on the passport scan, return null.
+- Dates must be YYYY-MM-DD. Best-guess for DOB if day/month unclear, but NEVER guess passport expiry.
+- The documentsFound array helps staff know what was detected — list everything you see (e.g. "Passport", "Birth Certificate", "Diploma Certificate", "Experience Letter").
+- Skills can be inferred from certificates, job titles, or experience letters if no explicit list exists.
 `;
 
 export async function POST(req: Request) {

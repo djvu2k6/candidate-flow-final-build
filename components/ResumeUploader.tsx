@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { UploadCloud, Loader2, CheckCircle2, AlertCircle, Edit3, Database, UserPlus } from "lucide-react";
+import { UploadCloud, Loader2, CheckCircle2, AlertCircle, Edit3, Database, UserPlus, FileText } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { logAction } from "@/lib/audit";
 
@@ -12,20 +12,20 @@ export default function ResumeUploader() {
   const [parsedData, setParsedData] = useState<any>(null);
   const [validationErrors, setValidationErrors] = useState<any>({});
 
-  // NEW: Agent States
+  // Agent States
   const [agents, setAgents] = useState<{ id: string, name: string }[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
 
-  // Expanded F1 Data State
+  // F1 Data State (Nationality Removed)
   const [manualData, setManualData] = useState({
     name: "", email: "", phone: "", role: "",
-    country: "", nationality: "", passport: "", dob: "",
+    country: "", passport: "", dob: "",
     destination: "", experience: "", education: "",
     skills: "", visaTrack: "H-1B Track", additionalInfo: "",
     passportExpiry: "", gender: ""
   });
 
-  // NEW: Fetch Agents on Component Mount
+  // Fetch Agents on Component Mount
   useEffect(() => {
     const fetchAgents = async () => {
       const { data, error } = await supabase.from('agents').select('id, name');
@@ -61,22 +61,23 @@ export default function ResumeUploader() {
 
       if (!response.ok) throw new Error(result.details || result.error);
 
+      // Map Gemini response (Nationality removed, Documents Added)
       setParsedData({
         name: result.fullName || "",
         email: result.email || "",
         phone: result.phone || "",
         currentRole: "",
         country: "",
-        nationality: result.nationality || "",
         passport: result.passportNumber || "",
         dob: result.dob || "",
         destination: "",
         experienceYears: result.experienceYears || 0,
-        education: "",
+        education: result.education || "",
         skills: result.skills || [],
         visaTrackRecommendation: "H-1B Track",
         additionalInfo: result.summary || "",
-        passportExpiry: result.passportExpiry || ""
+        passportExpiry: result.passportExpiry || "",
+        documentsFound: result.documentsFound || [] // NEW
       });
 
       setStatus("success");
@@ -113,7 +114,6 @@ export default function ResumeUploader() {
       phone: manualData.phone,
       currentRole: manualData.role,
       country: manualData.country,
-      nationality: manualData.nationality,
       passport: manualData.passport,
       dob: manualData.dob,
       destination: manualData.destination,
@@ -124,6 +124,7 @@ export default function ResumeUploader() {
       additionalInfo: manualData.additionalInfo,
       passportExpiry: manualData.passportExpiry,
       gender: manualData.gender,
+      documentsFound: []
     });
     setStatus("success");
   };
@@ -142,7 +143,7 @@ export default function ResumeUploader() {
           phone: parsedData.phone,
           current_role: parsedData.currentRole,
           country: parsedData.country,
-          nationality: parsedData.nationality,
+          // Nationality column omitted intentionally
           passport_number: parsedData.passport,
           dob: parsedData.dob || null,
           destination_country: parsedData.destination,
@@ -153,7 +154,8 @@ export default function ResumeUploader() {
           gender: parsedData.gender || null,
           additional_info: {
             notes: parsedData.additionalInfo,
-            passport_expiry: parsedData.passportExpiry || null
+            passport_expiry: parsedData.passportExpiry || null,
+            documents_detected: parsedData.documentsFound || []
           },
           status: "AI Parsed",
           assigned_agent_id: selectedAgentId || null
@@ -204,11 +206,11 @@ export default function ResumeUploader() {
       {mode === "ai" ? (
         <>
           <div className="relative border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-10 hover:bg-slate-50 dark:hover:bg-slate-850 hover:border-slate-400 dark:hover:border-slate-600 transition-all flex flex-col items-center justify-center cursor-pointer group">
-            <input type="file" accept="application/pdf" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+            <input type="file" accept="application/pdf,image/*" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
             <div className="p-4 bg-slate-900 dark:bg-blue-600 text-white rounded-full mb-4 group-hover:scale-110 transition-transform shadow-md">
               <UploadCloud className="w-6 h-6" />
             </div>
-            <p className="text-sm font-bold text-slate-900 dark:text-white">{file ? file.name : "Click or drag PDF to upload"}</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-white">{file ? file.name : "Click or drag multi-page PDF here"}</p>
           </div>
 
           {(status === "idle" || status === "extracting" || status === "parsing" || status === "error") && (
@@ -217,9 +219,9 @@ export default function ResumeUploader() {
               disabled={!file || status === "extracting" || status === "parsing"}
               className="w-full mt-6 py-3 px-4 bg-slate-900 dark:bg-blue-600 hover:bg-black dark:hover:bg-blue-700 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-500 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             >
-              {status === "idle" && "Extract Bio-Data"}
+              {status === "idle" && "Extract Bio-Data & Docs"}
               {status === "extracting" && <><Loader2 className="w-4 h-4 animate-spin" /> Reading Document...</>}
-              {status === "parsing" && <><Loader2 className="w-4 h-4 animate-spin" /> AI Processing F1 Fields...</>}
+              {status === "parsing" && <><Loader2 className="w-4 h-4 animate-spin" /> AI Processing Data...</>}
               {status === "error" && <><AlertCircle className="w-4 h-4" /> Processing Failed</>}
             </button>
           )}
@@ -256,16 +258,14 @@ export default function ResumeUploader() {
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Passport Expiry Date</label>
               <input type="date" value={manualData.passportExpiry} onChange={e => setManualData({ ...manualData, passportExpiry: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Nationality</label>
-              <input type="text" value={manualData.nationality} onChange={e => setManualData({ ...manualData, nationality: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
-            </div>
+            
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Destination Country</label>
               <select value={manualData.destination} onChange={e => setManualData({ ...manualData, destination: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
                 <option value="">Select Destination...</option>
                 <option value="UAE">United Arab Emirates</option>
                 <option value="Saudi Arabia">Saudi Arabia</option>
+                <option value="Israel">Israel</option>
                 <option value="Qatar">Qatar</option>
                 <option value="Oman">Oman</option>
                 <option value="UK">United Kingdom</option>
@@ -311,6 +311,24 @@ export default function ResumeUploader() {
 
       {(status === "success" || status === "saving" || status === "saved") && parsedData && (
         <div className="mt-8 space-y-4 pt-6 border-t border-slate-100 dark:border-slate-800">
+          
+          {/* NEW: Detected Documents Badge Section */}
+          {parsedData.documentsFound && parsedData.documentsFound.length > 0 && (
+            <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 rounded-xl mb-4">
+              <div className="flex items-center gap-2 mb-2 text-indigo-700 dark:text-indigo-400">
+                <FileText className="w-4 h-4" />
+                <h4 className="text-xs font-bold uppercase tracking-wider">AI Detected Documents</h4>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {parsedData.documentsFound.map((doc: string, idx: number) => (
+                  <span key={idx} className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-800 dark:text-indigo-300 text-[10px] font-bold rounded-md shadow-sm">
+                    {doc}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl">
             <div className="flex items-center gap-2 mb-3">
               <CheckCircle2 className="w-5 h-5 text-slate-900 dark:text-emerald-400" />
