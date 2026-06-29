@@ -87,7 +87,6 @@ export default function DashboardPage() {
       return (
         c.name.toLowerCase().includes(query) ||
         (c.current_role && c.current_role.toLowerCase().includes(query)) ||
-        (c.visa_track_recommendation && c.visa_track_recommendation.toLowerCase().includes(query)) ||
         (c.status && c.status.toLowerCase().includes(query)) ||
         (c.skills && c.skills.some(s => s.toLowerCase().includes(query)))
       );
@@ -151,19 +150,19 @@ export default function DashboardPage() {
 
       {/* Main Dashboard Space */}
       <div className="p-4 sm:p-8 max-w-[1600px] w-full mx-auto space-y-8">
-        
+
         {/* Metric Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Card 1 */}
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-5 transition-all hover:shadow-md duration-300">
-            <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-700 dark:text-blue-400 shrink-0">
+          {/* Card 1 - NOW CLICKABLE & NAVIGATES TO CANDIDATES SECTION */}
+          <Link href="/candidate-section" className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-5 transition-all hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 duration-300 group cursor-pointer">
+            <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-700 dark:text-blue-400 shrink-0 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 group-hover:text-blue-600 transition-colors">
               <Users className="w-6 h-6" />
             </div>
             <div>
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Talent Pool</p>
-              <h2 className="text-3xl font-black text-slate-900 dark:text-white mt-1">{candidates.length}</h2>
+              <h2 className="text-3xl font-black text-slate-900 dark:text-white mt-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{candidates.length}</h2>
             </div>
-          </div>
+          </Link>
 
           {/* Card 2 */}
           <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-5 transition-all hover:shadow-md duration-300">
@@ -201,7 +200,7 @@ export default function DashboardPage() {
 
         {/* Dynamic Widgets and main layout */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-          
+
           {/* Main Candidates Roster (2 Cols) */}
           <div className="xl:col-span-2 space-y-6">
             <CandidateTable candidates={filteredCandidates} onRefresh={fetchDashboardData} />
@@ -209,7 +208,7 @@ export default function DashboardPage() {
 
           {/* Widgets Sidebar Column (1 Col) */}
           <div className="space-y-8">
-            
+
             {/* Widget: Recent AI Parses */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 transition-all duration-300">
               <div className="flex items-center justify-between mb-5">
@@ -231,7 +230,7 @@ export default function DashboardPage() {
                         </div>
                         <div>
                           <p className="text-xs font-bold text-slate-900 dark:text-white">{c.name}</p>
-                          <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">{c.visa_track_recommendation || "N/A"}</p>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">{c.current_role || "Uncategorized"}</p>
                         </div>
                       </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50">

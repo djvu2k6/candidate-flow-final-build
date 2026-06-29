@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { Settings as SettingsIcon, Shield, UserPlus, Mail, Lock, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Settings as SettingsIcon, Shield, UserPlus, Mail, Lock, Loader2, Briefcase, Building2, ChevronRight } from "lucide-react";
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<any>(null);
@@ -90,6 +91,29 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* SYSTEM DATA & CONFIGURATION - NEW SECTION */}
+        {profile?.role === "admin" && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+              <Briefcase className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" /> System Data
+            </h2>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-6">Manage master lists and global configurations used across the application.</p>
+
+            <Link href="/settings/job-categories" className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all group cursor-pointer">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg transition-colors group-hover:bg-blue-600 group-hover:text-white dark:group-hover:bg-blue-500">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Manage Job Categories</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Add, edit, or permanently delete the target roles used by the AI and dropdowns.</p>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+            </Link>
+          </div>
+        )}
 
         {/* Team Management Section - Visible ONLY to ADMINS */}
         {profile?.role === "admin" && (

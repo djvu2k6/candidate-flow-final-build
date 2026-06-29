@@ -11,7 +11,8 @@ import {
     Menu,
     X,
     Briefcase,
-    Plus
+    Plus,
+    Building2
 } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -43,7 +44,6 @@ export default function Sidebar() {
 
     const isAdmin = role?.toLowerCase() === "admin";
 
-    // Dashboard now available to everyone. Agents is Admin-only.
     const allNavItems = [
         { name: "Dashboard", href: "/", icon: LayoutDashboard, reqAdmin: false },
         { name: "Candidates", href: "/candidate-section", icon: Users, reqAdmin: false },
@@ -61,7 +61,6 @@ export default function Sidebar() {
 
     return (
         <>
-            {/* Mobile Header Panel / Trigger Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="lg:hidden fixed top-4 left-4 z-50 p-2.5 bg-white dark:bg-slate-900 rounded-xl shadow-md border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all cursor-pointer"
@@ -70,19 +69,25 @@ export default function Sidebar() {
                 {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
 
-            {/* Persistent Sidebar drawer */}
             <div className={`
                 fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out flex flex-col print:hidden
                 ${isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full lg:translate-x-0"}
             `}>
-                <div className="h-[84px] flex items-center px-8 border-b border-slate-100 dark:border-slate-800 shrink-0">
-                    <div className="w-8 h-8 bg-slate-900 dark:bg-blue-600 rounded-lg flex items-center justify-center mr-3 shrink-0 shadow-sm transition-colors duration-200">
-                        <Users className="w-5 h-5 text-white" />
+                {/* BRANDING SECTION - NOW WRAPPED IN A LINK TO DASHBOARD */}
+                <Link
+                    href="/"
+                    onClick={() => setIsOpen(false)}
+                    className="h-[84px] flex items-center px-6 border-b border-slate-100 dark:border-slate-800 shrink-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                >
+                    <div className="w-10 h-10 bg-slate-900 dark:bg-blue-600 rounded-lg flex items-center justify-center mr-3 shrink-0 shadow-sm transition-colors duration-200">
+                        <Building2 className="w-6 h-6 text-white" />
                     </div>
-                    <span className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                        Candidate <span className="text-blue-600 dark:text-blue-400">Flow</span>
-                    </span>
-                </div>
+                    <div className="flex flex-col">
+                        <span className="text-[14px] font-black text-slate-900 dark:text-white leading-tight">Clockwise</span>
+                        <span className="text-[13px] font-black text-slate-900 dark:text-white leading-tight">Consultancy</span>
+                        <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mt-0.5">Candidate Flow</span>
+                    </div>
+                </Link>
 
                 <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
                     {navItems.map((item) => {
@@ -108,7 +113,6 @@ export default function Sidebar() {
                     })}
                 </nav>
 
-                {/* Mobile & Desktop trigger button in sidebar for consistency */}
                 <div className="px-4 mb-4">
                     <Dialog open={isUploaderOpen} onOpenChange={setIsUploaderOpen}>
                         <DialogTrigger className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-sm shadow-blue-500/20 cursor-pointer">
@@ -139,7 +143,6 @@ export default function Sidebar() {
                 </div>
             </div>
 
-            {/* Mobile backdrop overlay with transition */}
             <div
                 onClick={() => setIsOpen(false)}
                 className={`

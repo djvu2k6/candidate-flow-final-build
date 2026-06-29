@@ -1,9 +1,22 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { UploadCloud, Loader2, CheckCircle2, AlertCircle, Edit3, Database, UserPlus, FileText } from "lucide-react";
+import { UploadCloud, Loader2, CheckCircle2, AlertCircle, Edit3, Database, UserPlus, FileText, Shield, Plus, X, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { logAction } from "@/lib/audit";
+
+// Helper function to dynamically calculate age
+const calculateAge = (dobString: string) => {
+  if (!dobString) return null;
+  const birthDate = new Date(dobString);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+};
 
 export default function ResumeUploader() {
   const [mode, setMode] = useState<"ai" | "manual">("ai");
@@ -12,30 +25,40 @@ export default function ResumeUploader() {
   const [parsedData, setParsedData] = useState<any>(null);
   const [validationErrors, setValidationErrors] = useState<any>({});
 
-  // Agent States
-  const [agents, setAgents] = useState<{ id: string, name: string }[]>([]);
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  // Dropdown States
+  const [agents, setAgents] = useState<any[]>([]);
+  const [staff, setStaff] = useState<any[]>([]);
+  const [jobCategories, setJobCategories] = useState<any[]>([]);
 
-  // F1 Data State (Nationality Removed)
+  // Assignment States
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [selectedStaffId, setSelectedStaffId] = useState<string>("");
+  const [selectedJobCategory, setSelectedJobCategory] = useState<string>("");
+
+  // Inline "Add New Category" States
+  const [isAddingNewJob, setIsAddingNewJob] = useState(false);
+  const [newJobName, setNewJobName] = useState("");
+  const [jobError, setJobError] = useState("");
+
   const [manualData, setManualData] = useState({
-    name: "", email: "", phone: "", role: "",
-    country: "", passport: "", dob: "",
-    destination: "", experience: "", education: "",
-    skills: "", visaTrack: "H-1B Track", additionalInfo: "",
-    passportExpiry: "", gender: ""
+    name: "", email: "", phone: "", address: "",
+    passport: "", dob: "", destination: "",
+    experience: "", education: "", skills: "",
+    additionalInfo: "", passportExpiry: "", gender: ""
   });
 
-  // Fetch Agents on Component Mount
   useEffect(() => {
-    const fetchAgents = async () => {
-      const { data, error } = await supabase.from('agents').select('id, name');
-      if (data && !error) {
-        setAgents(data);
-      } else {
-        console.error("Failed to fetch agents:", error);
-      }
+    const fetchDependencies = async () => {
+      const { data: agentsData } = await supabase.from('agents').select('id, name');
+      if (agentsData) setAgents(agentsData);
+
+      const { data: staffData } = await supabase.from('profiles').select('id, email');
+      if (staffData) setStaff(staffData);
+
+      const { data: jobData } = await supabase.from('job_categories').select('id, name').order('name');
+      if (jobData) setJobCategories(jobData);
     };
-    fetchAgents();
+    fetchDependencies();
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,32 +75,26 @@ export default function ResumeUploader() {
       const formData = new FormData();
       formData.append('file', fileToUpload);
 
-      const response = await fetch('/api/parse', {
-        method: 'POST',
-        body: formData,
-      });
-
+      const response = await fetch('/api/parse', { method: 'POST', body: formData });
       const result = await response.json();
 
       if (!response.ok) throw new Error(result.details || result.error);
 
-      // Map Gemini response (Nationality removed, Documents Added)
       setParsedData({
         name: result.fullName || "",
         email: result.email || "",
         phone: result.phone || "",
-        currentRole: "",
-        country: "",
+        address: result.address || "",
         passport: result.passportNumber || "",
         dob: result.dob || "",
         destination: "",
-        experienceYears: result.experienceYears || 0,
+        experienceYears: result.experienceYears || "",
         education: result.education || "",
         skills: result.skills || [],
-        visaTrackRecommendation: "H-1B Track",
         additionalInfo: result.summary || "",
         passportExpiry: result.passportExpiry || "",
-        documentsFound: result.documentsFound || [] // NEW
+        gender: result.gender || "",
+        documentsFound: result.documentsFound || []
       });
 
       setStatus("success");
@@ -89,17 +106,17 @@ export default function ResumeUploader() {
 
   const validateForm = (dataToValidate: any) => {
     const errors: any = {};
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (dataToValidate.email && !emailRegex.test(dataToValidate.email)) {
       errors.email = "Invalid email format.";
     }
-
     const digitsOnly = (dataToValidate.phone || "").replace(/\D/g, '');
     if (dataToValidate.phone && digitsOnly.length > 0 && digitsOnly.length < 10) {
       errors.phone = "Phone number must be at least 10 digits.";
     }
-
+    if (mode === "manual" && !selectedJobCategory) {
+      errors.jobCategory = "Job Category is required.";
+    }
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -112,15 +129,12 @@ export default function ResumeUploader() {
       name: manualData.name,
       email: manualData.email,
       phone: manualData.phone,
-      currentRole: manualData.role,
-      country: manualData.country,
+      address: manualData.address,
       passport: manualData.passport,
       dob: manualData.dob,
       destination: manualData.destination,
-      experienceYears: parseInt(manualData.experience) || 0,
-      education: manualData.education,
+      experienceYears: manualData.experience,
       skills: manualData.skills.split(',').map((s: string) => s.trim()).filter(Boolean),
-      visaTrackRecommendation: manualData.visaTrack,
       additionalInfo: manualData.additionalInfo,
       passportExpiry: manualData.passportExpiry,
       gender: manualData.gender,
@@ -129,36 +143,68 @@ export default function ResumeUploader() {
     setStatus("success");
   };
 
-  const handleSaveToVault = async () => {
-    if (!parsedData) return;
-    if (!validateForm(parsedData)) return;
+  const saveNewJobCategory = async () => {
+    const trimmedName = newJobName.trim();
+    if (!trimmedName) {
+      setJobError("Category name cannot be empty.");
+      return;
+    }
 
-    setStatus("saving");
+    const exists = jobCategories.some(job => job.name.toLowerCase() === trimmedName.toLowerCase());
+    if (exists) {
+      setJobError("This category already exists.");
+      return;
+    }
+    setJobError("");
+
     try {
+      const { data, error } = await supabase
+        .from('job_categories')
+        .insert([{ name: trimmedName }])
+        .select();
+
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setJobCategories(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
+        setSelectedJobCategory(data[0].id);
+        setNewJobName("");
+        setIsAddingNewJob(false);
+      }
+    } catch (err: any) {
+      setJobError(`Database Error: ${err.message}`);
+    }
+  };
+
+  const handleSaveToVault = async () => {
+    if (!parsedData || !validateForm(parsedData)) return;
+    setStatus("saving");
+
+    try {
+      const selectedJob = jobCategories.find(j => j.id === selectedJobCategory);
+
       const { error } = await supabase
         .from('candidates')
         .insert([{
           name: parsedData.name,
           email: parsedData.email,
           phone: parsedData.phone,
-          current_role: parsedData.currentRole,
-          country: parsedData.country,
-          // Nationality column omitted intentionally
+          address: parsedData.address,
+          current_role: selectedJob?.name || "Uncategorized",
           passport_number: parsedData.passport,
           dob: parsedData.dob || null,
           destination_country: parsedData.destination,
-          skills: parsedData.skills || [],
-          experience_years: parsedData.experienceYears,
+          skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
+          experience_years: parseInt(parsedData.experienceYears) || 0,
           education: parsedData.education,
-          visa_track_recommendation: parsedData.visaTrackRecommendation,
           gender: parsedData.gender || null,
           additional_info: {
             notes: parsedData.additionalInfo,
             passport_expiry: parsedData.passportExpiry || null,
             documents_detected: parsedData.documentsFound || []
           },
-          status: "AI Parsed",
-          assigned_agent_id: selectedAgentId || null
+          status: "Pending",
+          assigned_agent_id: selectedAgentId || null,
+          assigned_staff_id: selectedStaffId || null
         }]);
 
       if (error) throw error;
@@ -170,36 +216,89 @@ export default function ResumeUploader() {
     }
   };
 
+  // CHECKUP LOGIC: Determine if critical fields are missing
+  const missingFields = [];
+  if (status === "success" && parsedData) {
+    if (!parsedData.name) missingFields.push("Name");
+    if (!parsedData.dob) missingFields.push("Date of Birth");
+    if (!parsedData.passport) missingFields.push("Passport Number");
+    if (parsedData.experienceYears === "" || parsedData.experienceYears === null) missingFields.push("Experience");
+    if (!selectedJobCategory) missingFields.push("Target Job Category");
+  }
+  const needsCheckup = missingFields.length > 0;
+
+  const calculatedAge = parsedData?.dob ? calculateAge(parsedData.dob) : null;
+  const isAgeWarning = calculatedAge !== null && (calculatedAge < 25 || calculatedAge > 44);
+
+  const renderJobCategorySelector = () => (
+    <div className="w-full">
+      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+        Target Job Category <span className="text-red-500">*</span>
+      </label>
+      {isAddingNewJob ? (
+        <div className="flex flex-col gap-1 w-full animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex gap-2 w-full">
+            <input
+              type="text"
+              autoFocus
+              value={newJobName}
+              onChange={e => { setNewJobName(e.target.value); setJobError(""); }}
+              className={`flex-1 p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all ${jobError ? 'border-red-500' : 'border-blue-500'}`}
+              placeholder="e.g. Forklift Operator"
+            />
+            <button type="button" onClick={saveNewJobCategory} className="px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold flex items-center gap-1 transition-all">
+              <CheckCircle2 className="w-4 h-4" /> Save
+            </button>
+            <button type="button" onClick={() => { setIsAddingNewJob(false); setJobError(""); }} className="px-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg flex items-center transition-all">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {jobError && <p className="text-xs text-red-500 font-bold">{jobError}</p>}
+        </div>
+      ) : (
+        <select
+          value={selectedJobCategory}
+          onChange={(e) => {
+            if (e.target.value === "ADD_NEW") {
+              setIsAddingNewJob(true);
+              setSelectedJobCategory("");
+              setJobError("");
+            } else {
+              setSelectedJobCategory(e.target.value);
+            }
+          }}
+          className={`w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all rounded-lg 
+            ${(!selectedJobCategory && status === "success") ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 border'}`}
+        >
+          <option value="">-- Select Category --</option>
+          {jobCategories.map((job) => <option key={job.id} value={job.id}>{job.name}</option>)}
+          <option disabled>──────────</option>
+          <option value="ADD_NEW" className="font-bold text-blue-600 dark:text-blue-400">
+            + Add New Job Category...
+          </option>
+        </select>
+      )}
+    </div>
+  );
+
   return (
     <div className="w-full max-w-3xl mx-auto p-6 sm:p-8 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-2xl shadow-xl max-h-[85vh] overflow-y-auto border border-slate-100 dark:border-slate-800 transition-colors duration-200">
 
       <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mb-8 w-full max-w-[260px] mx-auto shadow-inner transition-colors duration-200">
-        <button
-          onClick={() => setMode("ai")}
-          className={`flex-1 text-xs font-bold py-2 rounded-lg transition-all cursor-pointer ${mode === "ai"
-              ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
-              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-            }`}
-        >
-          AI Parsing
+        <button onClick={() => setMode("ai")} className={`flex-1 text-xs font-bold py-2 rounded-lg transition-all cursor-pointer ${mode === "ai" ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}>
+          AI Intake
         </button>
-        <button
-          onClick={() => setMode("manual")}
-          className={`flex-1 text-xs font-bold py-2 rounded-lg transition-all cursor-pointer ${mode === "manual"
-              ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
-              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-            }`}
-        >
+        <button onClick={() => setMode("manual")} className={`flex-1 text-xs font-bold py-2 rounded-lg transition-all cursor-pointer ${mode === "manual" ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}>
           Manual Entry
         </button>
       </div>
 
       <div className="text-center mb-8">
         <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-          {mode === "ai" ? "Upload Candidate Profile" : "Manual Bio-Data Entry"}
+          Clockwise Candidate Intake
         </h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">
-          {mode === "ai" ? "Gemini 2.5 Flash will extract all F1 required fields." : "Bypass AI and enter all F1 fields directly."}
+          {mode === "ai" ? "Upload the bio-data bundle. AI will extract demographics & documents." : "Bypass AI and enter candidate details manually."}
         </p>
       </div>
 
@@ -231,148 +330,145 @@ export default function ResumeUploader() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Full Name *</label>
-              <input type="text" required value={manualData.name} onChange={e => setManualData({ ...manualData, name: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition-all" />
+              <input type="text" required value={manualData.name} onChange={e => setManualData({ ...manualData, name: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
+            </div>
+            {renderJobCategorySelector()}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Date of Birth *</label>
+              <input type="date" required value={manualData.dob} onChange={e => setManualData({ ...manualData, dob: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Target Role *</label>
-              <input type="text" required value={manualData.role} onChange={e => setManualData({ ...manualData, role: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition-all" />
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Years of Experience *</label>
+              <input type="number" required value={manualData.experience} onChange={e => setManualData({ ...manualData, experience: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Email</label>
-              <input type="email" value={manualData.email} onChange={e => setManualData({ ...manualData, email: e.target.value })} className={`w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-900 dark:text-white ${validationErrors.email ? 'border-red-500 dark:border-red-800 bg-red-50 dark:bg-red-950/20' : 'border-slate-200 dark:border-slate-800'}`} />
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Passport Number *</label>
+              <input type="text" required value={manualData.passport} onChange={e => setManualData({ ...manualData, passport: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 uppercase text-slate-900 dark:text-white transition-all" />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Phone</label>
-              <input type="text" value={manualData.phone} onChange={e => setManualData({ ...manualData, phone: e.target.value })} className={`w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-900 dark:text-white ${validationErrors.phone ? 'border-red-500 dark:border-red-800 bg-red-50 dark:bg-red-950/20' : 'border-slate-200 dark:border-slate-800'}`} />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Date of Birth</label>
-              <input type="date" value={manualData.dob} onChange={e => setManualData({ ...manualData, dob: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Passport Number</label>
-              <input type="text" value={manualData.passport} onChange={e => setManualData({ ...manualData, passport: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 uppercase text-slate-900 dark:text-white transition-all" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Passport Expiry Date</label>
-              <input type="date" value={manualData.passportExpiry} onChange={e => setManualData({ ...manualData, passportExpiry: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
-            </div>
-            
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Destination Country</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Target Destination</label>
               <select value={manualData.destination} onChange={e => setManualData({ ...manualData, destination: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
-                <option value="">Select Destination...</option>
+                <option value="">Select...</option>
+                <option value="Israel">Israel</option>
                 <option value="UAE">United Arab Emirates</option>
                 <option value="Saudi Arabia">Saudi Arabia</option>
-                <option value="Israel">Israel</option>
                 <option value="Qatar">Qatar</option>
                 <option value="Oman">Oman</option>
                 <option value="UK">United Kingdom</option>
                 <option value="USA">United States</option>
               </select>
             </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Target Visa Track</label>
-              <select value={manualData.visaTrack} onChange={e => setManualData({ ...manualData, visaTrack: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
-                <option>H-1B Track</option>
-                <option>L-1 Track</option>
-                <option>O-1A Track</option>
-                <option>EB-2 NIW</option>
-                <option>General Work Permit</option>
-              </select>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Additional Skills</label>
+              <input type="text" value={manualData.skills} onChange={e => setManualData({ ...manualData, skills: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="e.g. TIG Welding, Heavy Equipment" />
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Gender</label>
-              <select value={manualData.gender} onChange={e => setManualData({ ...manualData, gender: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
-                <option value="">Select Gender...</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Years of Experience *</label>
-              <input type="number" required value={manualData.experience} onChange={e => setManualData({ ...manualData, experience: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Additional Notes</label>
+              <textarea rows={2} value={manualData.additionalInfo} onChange={e => setManualData({ ...manualData, additionalInfo: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="Add specific remarks, skills, or observations..." />
             </div>
           </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Skills (Comma separated)</label>
-            <input type="text" placeholder="Welding, Electrical, Safety..." value={manualData.skills} onChange={e => setManualData({ ...manualData, skills: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
-          </div>
-
-          <button type="submit" className="w-full mt-2 py-3 px-4 bg-slate-900 dark:bg-blue-600 hover:bg-black dark:hover:bg-blue-700 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+          <button type="submit" className="w-full mt-2 py-3 px-4 bg-slate-900 dark:bg-blue-600 hover:bg-black text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm">
             <Edit3 className="w-4 h-4" /> Verify & Prepare Data
           </button>
         </form>
       )}
 
+      {/* CONFIRMATION & ASSIGNMENT SECTION */}
       {(status === "success" || status === "saving" || status === "saved") && parsedData && (
-        <div className="mt-8 space-y-4 pt-6 border-t border-slate-100 dark:border-slate-800">
-          
-          {/* NEW: Detected Documents Badge Section */}
-          {parsedData.documentsFound && parsedData.documentsFound.length > 0 && (
-            <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 rounded-xl mb-4">
-              <div className="flex items-center gap-2 mb-2 text-indigo-700 dark:text-indigo-400">
-                <FileText className="w-4 h-4" />
-                <h4 className="text-xs font-bold uppercase tracking-wider">AI Detected Documents</h4>
+        <div className="mt-8 space-y-4 pt-6 border-t border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+          {needsCheckup && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl flex items-start gap-3 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-black text-amber-900 dark:text-amber-400">Action Required: Missing Information</h4>
+                <p className="text-xs text-amber-800 dark:text-amber-300 mt-1 font-medium">
+                  The AI could not locate the following fields. Please complete them before saving: <span className="font-bold underline">{missingFields.join(", ")}</span>
+                </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {parsedData.documentsFound.map((doc: string, idx: number) => (
-                  <span key={idx} className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-800 dark:text-indigo-300 text-[10px] font-bold rounded-md shadow-sm">
-                    {doc}
-                  </span>
-                ))}
+            </div>
+          )}
+
+          {calculatedAge !== null && (
+            <div className={`p-3 rounded-xl border flex items-center gap-3 transition-colors ${isAgeWarning ? 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800/50 dark:text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-800/50 dark:text-emerald-300'}`}>
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <div>
+                <p className="text-sm font-black">Calculated Age: {calculatedAge} Years Old</p>
+                {isAgeWarning && <p className="text-xs font-medium">Warning: Candidate is outside the standard 25-44 age bracket.</p>}
               </div>
             </div>
           )}
 
           <div className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl">
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-4">
               <CheckCircle2 className="w-5 h-5 text-slate-900 dark:text-emerald-400" />
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Ready for Vault</h4>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Data Verification</h4>
             </div>
 
-            {Object.keys(validationErrors).length > 0 && (
-              <div className="mb-3 p-3 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-lg">
-                <p className="text-xs font-bold text-red-700 dark:text-red-400 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Fix data before saving:</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Full Name <span className="text-red-500">*</span></label>
+                <input type="text" value={parsedData.name} onChange={e => setParsedData({ ...parsedData, name: e.target.value })} className={`w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all ${!parsedData.name ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50' : 'bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800'}`} placeholder="Required" />
               </div>
-            )}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Passport Number <span className="text-red-500">*</span></label>
+                <input type="text" value={parsedData.passport} onChange={e => setParsedData({ ...parsedData, passport: e.target.value })} className={`w-full p-2.5 text-sm uppercase outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all ${!parsedData.passport ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50' : 'bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800'}`} placeholder="Required" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Date of Birth <span className="text-red-500">*</span></label>
+                <input type="date" value={parsedData.dob} onChange={e => setParsedData({ ...parsedData, dob: e.target.value })} className={`w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all ${!parsedData.dob ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50' : 'bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800'}`} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Years Experience <span className="text-red-500">*</span></label>
+                <input type="number" value={parsedData.experienceYears} onChange={e => setParsedData({ ...parsedData, experienceYears: e.target.value })} className={`w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all ${(parsedData.experienceYears === "" || parsedData.experienceYears === null) ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50' : 'bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800'}`} placeholder="Required" />
+              </div>
 
-            <pre className="text-[10px] text-slate-600 dark:text-slate-300 overflow-x-auto p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-inner">
-              {JSON.stringify(parsedData, null, 2)}
-            </pre>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Additional Skills & Certifications</label>
+                <input type="text" value={Array.isArray(parsedData.skills) ? parsedData.skills.join(', ') : (parsedData.skills || '')} onChange={e => setParsedData({ ...parsedData, skills: e.target.value.split(',').map((s: string) => s.trim()) })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800" placeholder="e.g. TIG Welding, NEBOSH Safety, Heavy Machine Operation" />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Additional Notes / AI Summary</label>
+              <textarea rows={3} value={parsedData.additionalInfo} onChange={e => setParsedData({ ...parsedData, additionalInfo: e.target.value })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800" placeholder="Extracted AI summary or staff notes..." />
+            </div>
           </div>
 
-          {/* AGENT DROPDOWN SELECTOR */}
-          <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
-            <label className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
-              <UserPlus className="w-4 h-4 text-blue-600" />
-              Assign to Agent
-            </label>
-            <select
-              value={selectedAgentId}
-              onChange={(e) => setSelectedAgentId(e.target.value)}
-              className="w-full p-3 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all"
-            >
-              <option value="">-- Leave Unassigned --</option>
-              {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm flex items-end">
+              {renderJobCategorySelector()}
+            </div>
+
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 mb-2 uppercase tracking-wider">
+                <UserPlus className="w-3 h-3 text-blue-600" /> Source Agent
+              </label>
+              <select value={selectedAgentId} onChange={(e) => setSelectedAgentId(e.target.value)} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
+                <option value="">-- Direct / Unassigned --</option>
+                {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+              </select>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 mb-2 uppercase tracking-wider">
+                <Shield className="w-3 h-3 text-emerald-600" /> Internal Staff
+              </label>
+              <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
+                <option value="">-- Unassigned --</option>
+                {staff.map((member) => <option key={member.id} value={member.id}>{member.email}</option>)}
+              </select>
+            </div>
           </div>
 
           <button
             onClick={handleSaveToVault}
-            disabled={status === "saving" || status === "saved" || Object.keys(validationErrors).length > 0}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:disabled:text-slate-400 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            disabled={status === "saving" || status === "saved" || needsCheckup}
+            className={`w-full py-3 px-4 text-white text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm ${needsCheckup ? 'bg-amber-500 cursor-not-allowed opacity-80' : 'bg-blue-600 hover:bg-blue-700'}`}
           >
-            {status === "success" && <><Database className="w-4 h-4" /> Confirm & Vault Data</>}
-            {status === "saving" && <><Loader2 className="w-4 h-4 animate-spin" /> Committing to Database...</>}
+            {needsCheckup && <><AlertTriangle className="w-4 h-4" /> Complete Missing Fields</>}
+            {!needsCheckup && status === "success" && <><Database className="w-4 h-4" /> Confirm & Save to Clockwise DB</>}
+            {status === "saving" && <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>}
             {status === "saved" && <><CheckCircle2 className="w-4 h-4" /> Successfully Vaulted!</>}
           </button>
         </div>
