@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
-import { ArrowLeft, User, Briefcase, FileText, MapPin, Edit, Download, ShieldCheck, Camera, Loader2, Mail, Phone, Calendar, Fingerprint, ShieldAlert, Users, StickyNote, Trash2, Home, AlertTriangle } from "lucide-react";
+import { ArrowLeft, User, Briefcase, FileText, MapPin, Edit, Download, ShieldCheck, Camera, Loader2, Mail, Phone, Calendar, Fingerprint, ShieldAlert, Users, StickyNote, Trash2, Home, AlertTriangle, UserPlus, Shield } from "lucide-react";
 import CandidateEditor from "@/components/CandidateEditor";
 import CandidateStatusLog from "@/components/CandidateStatusLog";
 import { logAction } from "@/lib/audit";
@@ -48,6 +48,7 @@ export default function CandidateProfilePage() {
   const [interviews, setInterviews] = useState<any[]>([]);
   const [placement, setPlacement] = useState<any>(null);
   const [agents, setAgents] = useState<any[]>([]);
+  const [staff, setStaff] = useState<any[]>([]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -101,6 +102,9 @@ export default function CandidateProfilePage() {
     const { data: agentsData } = await supabase.from("agents").select("id, name, phone");
     if (agentsData) setAgents(agentsData);
 
+    const { data: staffData } = await supabase.from("profiles").select("id, email");
+    if (staffData) setStaff(staffData);
+
     setLoading(false);
   };
 
@@ -113,6 +117,18 @@ export default function CandidateProfilePage() {
     }
     const agent = agents.find(a => a.id === agentId);
     await logAction("CANDIDATE_EDIT", `Assigned candidate ${candidate.name} to agent ${agent?.name || 'Unassigned'}`);
+    fetchEverything();
+  };
+
+  const handleAssignStaff = async (staffId: string) => {
+    const dbStaffId = staffId === "" ? null : staffId;
+    const { error } = await supabase.from("candidates").update({ assigned_staff_id: dbStaffId }).eq("id", candidateId);
+    if (error) {
+      alert(`Database Error: ${error.message}`);
+      return;
+    }
+    const member = staff.find(s => s.id === staffId);
+    await logAction("CANDIDATE_EDIT", `Assigned candidate ${candidate.name} to staff ${member?.email || 'Unassigned'}`);
     fetchEverything();
   };
 
@@ -398,15 +414,54 @@ export default function CandidateProfilePage() {
               <ShieldCheck className="w-5 h-5 text-emerald-600" /> Pipeline & Assignment
             </h2>
             <div className="space-y-6">
+
+              {/* AGENT ASSIGNMENT */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Assigned Agent</label>
-                <select value={candidate.assigned_agent_id || ""} onChange={(e) => handleAssignAgent(e.target.value)} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600/50 outline-none transition-all">
-                  <option value="">-- Unassigned --</option>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <UserPlus className="w-3.5 h-3.5 text-blue-500" /> Source Agent
+                </label>
+                <select
+                  value={candidate.assigned_agent_id || ""}
+                  onChange={(e) => handleAssignAgent(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600/50 outline-none transition-all"
+                >
+                  <option value="">-- Direct / Unassigned --</option>
                   {agents.map(agent => (
-                    <option key={agent.id} value={agent.id}>{agent.name} {agent.phone ? `(${agent.phone})` : ''}</option>
+                    <option key={agent.id} value={agent.id}>{agent.name}{agent.phone ? ` (${agent.phone})` : ''}</option>
                   ))}
                 </select>
+                {candidate.assigned_agent_id && (
+                  <p className="text-[10px] text-blue-500 font-bold mt-1.5 flex items-center gap-1">
+                    <UserPlus className="w-3 h-3" />
+                    {agents.find(a => a.id === candidate.assigned_agent_id)?.name || 'Agent'} is currently assigned
+                  </p>
+                )}
               </div>
+
+              {/* STAFF ASSIGNMENT */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-emerald-500" /> Internal Staff
+                </label>
+                <select
+                  value={candidate.assigned_staff_id || ""}
+                  onChange={(e) => handleAssignStaff(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-600/50 outline-none transition-all"
+                >
+                  <option value="">-- Unassigned --</option>
+                  {staff.map(member => (
+                    <option key={member.id} value={member.id}>{member.email}</option>
+                  ))}
+                </select>
+                {candidate.assigned_staff_id && (
+                  <p className="text-[10px] text-emerald-500 font-bold mt-1.5 flex items-center gap-1">
+                    <Shield className="w-3 h-3" />
+                    {staff.find(s => s.id === candidate.assigned_staff_id)?.email || 'Staff'} is currently assigned
+                  </p>
+                )}
+              </div>
+
+              {/* STATUS */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Placement Status</label>
                 <select value={candidate.status || "Pending"} onChange={(e) => handleStatusChange(e.target.value)} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600/50 outline-none transition-all">

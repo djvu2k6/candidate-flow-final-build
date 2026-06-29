@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Download, FileText, Users, Edit, AlertTriangle, Search, UserPlus, Shield } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useRouter } from "next/navigation";
@@ -56,34 +56,58 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
   const [agentsMap, setAgentsMap] = useState<Record<string, string>>({});
   const [staffMap, setStaffMap] = useState<Record<string, string>>({});
 
+  // Refs so the second effect always sees the latest maps (no stale closure)
+  const agentsMapRef = useRef<Record<string, string>>({});
+  const staffMapRef = useRef<Record<string, string>>({});
+
   // Filters & Search State
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState("All".replace("All", ""));
   const [statusFilter, setStatusFilter] = useState("All");
   const [expFilter, setExpFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [genderFilter, setGenderFilter] = useState("All");
 
+  // Keep refs in sync with state so the second effect is never stale
+  useEffect(() => { agentsMapRef.current = agentsMap; }, [agentsMap]);
+  useEffect(() => { staffMapRef.current = staffMap; }, [staffMap]);
+
+  const loadMaps = async () => {
+    const { data: jobs } = await supabase.from("job_categories").select("id, name").order("name");
+    if (jobs) setJobCategories(jobs);
+
+    const { data: agents } = await supabase.from("agents").select("id, name");
+    if (agents) {
+      const aMap: Record<string, string> = {};
+      agents.forEach(a => { aMap[a.id] = a.name; });
+      setAgentsMap(aMap);
+    }
+
+    const { data: staff } = await supabase.from("profiles").select("id, email");
+    if (staff) {
+      const sMap: Record<string, string> = {};
+      staff.forEach(s => { sMap[s.id] = s.email; });
+      setStaffMap(sMap);
+    }
+  };
+
+  // Initial load on mount
+  useEffect(() => { loadMaps(); }, []);
+
+  // When the candidates list changes, re-fetch maps only if a new ID has
+  // appeared that isn't in the current maps — uses refs to avoid stale closures.
   useEffect(() => {
-    const fetchDependencies = async () => {
-      const { data: jobs } = await supabase.from("job_categories").select("id, name").order("name");
-      if (jobs) setJobCategories(jobs);
-
-      const { data: agents } = await supabase.from("agents").select("id, name");
-      if (agents) {
-        const aMap: Record<string, string> = {};
-        agents.forEach(a => aMap[a.id] = a.name);
-        setAgentsMap(aMap);
-      }
-
-      const { data: staff } = await supabase.from("profiles").select("id, email");
-      if (staff) {
-        const sMap: Record<string, string> = {};
-        staff.forEach(s => sMap[s.id] = s.email);
-        setStaffMap(sMap);
-      }
-    };
-    fetchDependencies();
-  }, []);
+    if (candidates.length === 0) return;
+    const hasMissingAgent = candidates.some(
+      c => c.assigned_agent_id && !(c.assigned_agent_id in agentsMapRef.current)
+    );
+    const hasMissingStaff = candidates.some(
+      c => c.assigned_staff_id && !(c.assigned_staff_id in staffMapRef.current)
+    );
+    if (hasMissingAgent || hasMissingStaff) {
+      loadMaps();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidates]);
 
   const filteredList = useMemo(() => {
     return candidates.filter((c) => {
@@ -247,8 +271,9 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                   const age = cand.dob ? calculateAge(cand.dob) : null;
                   const isAgeWarning = age !== null && (age < 25 || age > 44);
 
-                  const agentName = cand.assigned_agent_id ? agentsMap[cand.assigned_agent_id] : null;
-                  const staffEmail = cand.assigned_staff_id ? staffMap[cand.assigned_staff_id] : null;
+                  // Simple, direct lookup — no complex state machines
+                  const agentName = cand.assigned_agent_id ? (agentsMap[cand.assigned_agent_id] ?? null) : null;
+                  const staffEmail = cand.assigned_staff_id ? (staffMap[cand.assigned_staff_id] ?? null) : null;
 
                   return (
                     <tr
@@ -296,7 +321,7 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                       <td className="p-4 align-middle">
                         {agentName ? (
                           <div className="flex items-center gap-2">
-                            <UserPlus className="w-3.5 h-3.5 text-slate-400" />
+                            <UserPlus className="w-3.5 h-3.5 text-blue-400" />
                             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{agentName}</span>
                           </div>
                         ) : (
