@@ -24,8 +24,8 @@ export interface Candidate {
   notes?: string;
   dob?: string;
   passport_number?: string;
-  assigned_agent_id?: string;
-  assigned_staff_id?: string;
+  assigned_agent_id?: string | number;
+  assigned_staff_id?: string | number;
 }
 
 interface CandidateTableProps {
@@ -56,18 +56,17 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
   const [agentsMap, setAgentsMap] = useState<Record<string, string>>({});
   const [staffMap, setStaffMap] = useState<Record<string, string>>({});
 
-  // Refs so the second effect always sees the latest maps (no stale closure)
+  // Refs to avoid stale closures
   const agentsMapRef = useRef<Record<string, string>>({});
   const staffMapRef = useRef<Record<string, string>>({});
 
   // Filters & Search State
-  const [searchQuery, setSearchQuery] = useState("All".replace("All", ""));
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [expFilter, setExpFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [genderFilter, setGenderFilter] = useState("All");
 
-  // Keep refs in sync with state so the second effect is never stale
   useEffect(() => { agentsMapRef.current = agentsMap; }, [agentsMap]);
   useEffect(() => { staffMapRef.current = staffMap; }, [staffMap]);
 
@@ -78,30 +77,29 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
     const { data: agents } = await supabase.from("agents").select("id, name");
     if (agents) {
       const aMap: Record<string, string> = {};
-      agents.forEach(a => { aMap[a.id] = a.name; });
+      // Strictly map by string
+      agents.forEach(a => { aMap[String(a.id)] = a.name; });
       setAgentsMap(aMap);
     }
 
     const { data: staff } = await supabase.from("profiles").select("id, email");
     if (staff) {
       const sMap: Record<string, string> = {};
-      staff.forEach(s => { sMap[s.id] = s.email; });
+      // Strictly map by string
+      staff.forEach(s => { sMap[String(s.id)] = s.email; });
       setStaffMap(sMap);
     }
   };
 
-  // Initial load on mount
   useEffect(() => { loadMaps(); }, []);
 
-  // When the candidates list changes, re-fetch maps only if a new ID has
-  // appeared that isn't in the current maps — uses refs to avoid stale closures.
   useEffect(() => {
     if (candidates.length === 0) return;
     const hasMissingAgent = candidates.some(
-      c => c.assigned_agent_id && !(c.assigned_agent_id in agentsMapRef.current)
+      c => c.assigned_agent_id && !(String(c.assigned_agent_id) in agentsMapRef.current)
     );
     const hasMissingStaff = candidates.some(
-      c => c.assigned_staff_id && !(c.assigned_staff_id in staffMapRef.current)
+      c => c.assigned_staff_id && !(String(c.assigned_staff_id) in staffMapRef.current)
     );
     if (hasMissingAgent || hasMissingStaff) {
       loadMaps();
@@ -145,20 +143,25 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
   const handleExportExcel = async () => {
     if (filteredList.length === 0) return;
 
-    const exportData = filteredList.map((c) => ({
-      "Full Name": c.name,
-      "Age": c.dob ? calculateAge(c.dob) : "N/A",
-      "Gender": c.gender || "N/A",
-      "Email Address": c.email || "N/A",
-      "Phone Number": c.phone || "N/A",
-      "Target Job Category": c.current_role || "Uncategorized",
-      "Years Exp": c.experience_years || 0,
-      "Passport Number": c.passport_number || "N/A",
-      "Source Agent": c.assigned_agent_id ? agentsMap[c.assigned_agent_id] || "Unknown" : "Direct / None",
-      "Assigned Staff": c.assigned_staff_id ? staffMap[c.assigned_staff_id] || "Unknown" : "Unassigned",
-      "Application Status": c.status,
-      "Date Added": new Date(c.created_at).toLocaleDateString(),
-    }));
+    const exportData = filteredList.map((c) => {
+      const agentIdStr = c.assigned_agent_id ? String(c.assigned_agent_id) : null;
+      const staffIdStr = c.assigned_staff_id ? String(c.assigned_staff_id) : null;
+
+      return {
+        "Full Name": c.name,
+        "Age": c.dob ? calculateAge(c.dob) : "N/A",
+        "Gender": c.gender || "N/A",
+        "Email Address": c.email || "N/A",
+        "Phone Number": c.phone || "N/A",
+        "Target Job Category": c.current_role || "Uncategorized",
+        "Years Exp": c.experience_years || 0,
+        "Passport Number": c.passport_number || "N/A",
+        "Source Agent": agentIdStr ? agentsMap[agentIdStr] || "Unknown" : "Direct / None",
+        "Assigned Staff": staffIdStr ? staffMap[staffIdStr] || "Unknown" : "Unassigned",
+        "Application Status": c.status,
+        "Date Added": new Date(c.created_at).toLocaleDateString(),
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
@@ -271,9 +274,12 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                   const age = cand.dob ? calculateAge(cand.dob) : null;
                   const isAgeWarning = age !== null && (age < 25 || age > 44);
 
-                  // Simple, direct lookup — no complex state machines
-                  const agentName = cand.assigned_agent_id ? (agentsMap[cand.assigned_agent_id] ?? null) : null;
-                  const staffEmail = cand.assigned_staff_id ? (staffMap[cand.assigned_staff_id] ?? null) : null;
+                  // STRICT STRING LOOKUP
+                  const agentIdStr = cand.assigned_agent_id ? String(cand.assigned_agent_id) : null;
+                  const staffIdStr = cand.assigned_staff_id ? String(cand.assigned_staff_id) : null;
+
+                  const agentName = agentIdStr ? (agentsMap[agentIdStr] ?? null) : null;
+                  const staffEmail = staffIdStr ? (staffMap[staffIdStr] ?? null) : null;
 
                   return (
                     <tr
@@ -294,7 +300,6 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                               {cand.experience_years || 0} Yrs Exp
                             </span>
 
-                            {/* THE NEW STACKED AGE BADGE */}
                             {age !== null ? (
                               <span className={`px-2 py-0.5 text-[10px] rounded-md font-black flex items-center gap-1 w-fit ${isAgeWarning ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800/50 shadow-sm shadow-red-500/10' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}>
                                 {isAgeWarning && <AlertTriangle className="w-3 h-3" />}
@@ -305,7 +310,6 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                                 AGE N/A
                               </span>
                             )}
-
                           </div>
                         </div>
                       </td>
@@ -321,7 +325,7 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                       <td className="p-4 align-middle">
                         {agentName ? (
                           <div className="flex items-center gap-2">
-                            <UserPlus className="w-3.5 h-3.5 text-blue-400" />
+                            <UserPlus className="w-3.5 h-3.5 text-blue-500" />
                             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{agentName}</span>
                           </div>
                         ) : (
