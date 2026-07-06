@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import CandidateEditor from "./CandidateEditor";
 import { logAction } from "@/lib/audit";
 import { supabase } from "@/lib/supabase";
+import { Check, ChevronDown } from "lucide-react";
 
 export interface Candidate {
   id: string;
@@ -55,6 +56,9 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
   const [jobCategories, setJobCategories] = useState<any[]>([]);
   const [agentsMap, setAgentsMap] = useState<Record<string, string>>({});
   const [staffMap, setStaffMap] = useState<Record<string, string>>({});
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [categorySearchQuery, setCategorySearchQuery] = useState("");
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
   // Refs to avoid stale closures
   const agentsMapRef = useRef<Record<string, string>>({});
@@ -66,6 +70,18 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
   const [expFilter, setExpFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [genderFilter, setGenderFilter] = useState("All");
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+
 
   useEffect(() => { agentsMapRef.current = agentsMap; }, [agentsMap]);
   useEffect(() => { staffMapRef.current = staffMap; }, [staffMap]);
@@ -90,6 +106,13 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
       setStaffMap(sMap);
     }
   };
+
+  const filteredJobCategories = useMemo(() => {
+    if (!categorySearchQuery.trim()) return jobCategories;
+    return jobCategories.filter(job =>
+      job.name.toLowerCase().includes(categorySearchQuery.toLowerCase())
+    );
+  }, [jobCategories, categorySearchQuery]);
 
   useEffect(() => { loadMaps(); }, []);
 
@@ -228,14 +251,88 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                 <option value="5+">5+ Years</option>
               </select>
             </div>
-            <div className="flex-1 min-w-[140px]">
-              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Target Job</label>
-              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-full p-2 text-xs bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="All">All Categories</option>
-                {jobCategories.map(job => (
-                  <option key={job.id} value={job.name}>{job.name}</option>
-                ))}
-              </select>
+            {/* SEARCHABLE TARGET JOB DROPDOWN */}
+            <div className="flex-1 min-w-[160px] relative select-none" ref={categoryDropdownRef}>
+              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">
+                Target Job
+              </label>
+
+              {/* Dropdown Trigger Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCategoryDropdownOpen(!isCategoryDropdownOpen);
+                  if (!isCategoryDropdownOpen) setCategorySearchQuery(""); // Clear search when reopening
+                }}
+                className="w-full p-2 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-semibold flex items-center justify-between text-left transition-all cursor-pointer shadow-2xs"
+              >
+                <span className="truncate pr-2">
+                  {categoryFilter === "All" ? "All Categories" : categoryFilter}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${isCategoryDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {/* Dropdown Menu with Search Bar */}
+              {isCategoryDropdownOpen && (
+                <div className="absolute left-0 top-full mt-1.5 w-full min-w-[220px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+
+                  {/* Inline Search Input */}
+                  <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 relative">
+                    <Search className="w-3.5 h-3.5 absolute left-4 top-4 text-slate-400 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Search category name..."
+                      value={categorySearchQuery}
+                      onChange={(e) => setCategorySearchQuery(e.target.value)}
+                      onClick={(e) => e.stopPropagation()} // Prevents clicking the input from closing the menu
+                      autoFocus
+                      className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-750 rounded-lg text-slate-900 dark:text-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium placeholder:text-slate-400 transition-all"
+                    />
+                  </div>
+
+                  {/* Option List */}
+                  <div className="max-h-52 overflow-y-auto p-1.5 space-y-0.5 text-xs font-semibold">
+                    {/* "All Categories" Option */}
+                    <div
+                      onClick={() => {
+                        setCategoryFilter("All");
+                        setIsCategoryDropdownOpen(false);
+                      }}
+                      className={`px-3 py-2 rounded-lg cursor-pointer transition-colors flex items-center justify-between ${categoryFilter === "All"
+                        ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold"
+                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80"
+                        }`}
+                    >
+                      <span>All Categories</span>
+                      {categoryFilter === "All" && <Check className="w-3.5 h-3.5 shrink-0" />}
+                    </div>
+
+                    {/* Filtered Dynamic Options */}
+                    {filteredJobCategories.length === 0 ? (
+                      <div className="p-4 text-center text-slate-400 dark:text-slate-500 italic font-medium">
+                        No matching job category found.
+                      </div>
+                    ) : (
+                      filteredJobCategories.map((job) => (
+                        <div
+                          key={job.id}
+                          onClick={() => {
+                            setCategoryFilter(job.name);
+                            setIsCategoryDropdownOpen(false);
+                          }}
+                          className={`px-3 py-2 rounded-lg cursor-pointer transition-colors flex items-center justify-between truncate ${categoryFilter === job.name
+                            ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold"
+                            : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80"
+                            }`}
+                        >
+                          <span className="truncate pr-2">{job.name}</span>
+                          {categoryFilter === job.name && <Check className="w-3.5 h-3.5 shrink-0" />}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-[120px]">
               <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Gender</label>

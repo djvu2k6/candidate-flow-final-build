@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { UploadCloud, Loader2, CheckCircle2, AlertCircle, Edit3, Database, UserPlus, FileText, Shield, Plus, X, AlertTriangle } from "lucide-react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { UploadCloud, Loader2, CheckCircle2, AlertCircle, Edit3, Database, UserPlus, FileText, Shield, Plus, X, AlertTriangle, Search, ChevronDown, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { logAction } from "@/lib/audit";
+
 
 // Helper function to dynamically calculate age
 const calculateAge = (dobString: string) => {
@@ -25,10 +26,15 @@ export default function ResumeUploader() {
   const [parsedData, setParsedData] = useState<any>(null);
   const [validationErrors, setValidationErrors] = useState<any>({});
 
+
+
   // Dropdown States
   const [agents, setAgents] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
   const [jobCategories, setJobCategories] = useState<any[]>([]);
+  const [isJobDropdownOpen, setIsJobDropdownOpen] = useState(false);
+  const [jobSearchQuery, setJobSearchQuery] = useState("");
+  const jobDropdownRef = useRef<HTMLDivElement>(null);
 
   // Assignment States
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
@@ -61,6 +67,16 @@ export default function ResumeUploader() {
     fetchDependencies();
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (jobDropdownRef.current && !jobDropdownRef.current.contains(event.target as Node)) {
+        setIsJobDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
@@ -68,6 +84,17 @@ export default function ResumeUploader() {
       setParsedData(null);
     }
   };
+  const filteredJobCategories = useMemo(() => {
+    if (!jobSearchQuery.trim()) return jobCategories;
+    return jobCategories.filter(job =>
+      job.name.toLowerCase().includes(jobSearchQuery.toLowerCase())
+    );
+  }, [jobCategories, jobSearchQuery]);
+
+  const selectedJobObj = jobCategories.find(
+    j => String(j.id) === String(selectedJobCategory) || j.id === selectedJobCategory
+  );
+  const selectedJobName = selectedJobObj ? selectedJobObj.name : "-- Select Category --";
 
   const processResume = async (fileToUpload: File) => {
     try {
@@ -231,10 +258,12 @@ export default function ResumeUploader() {
   const isAgeWarning = calculatedAge !== null && (calculatedAge < 25 || calculatedAge > 44);
 
   const renderJobCategorySelector = () => (
-    <div className="w-full">
+    <div className="w-full relative select-none" ref={jobDropdownRef}>
       <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
         Target Job Category <span className="text-red-500">*</span>
       </label>
+
+      {/* INLINE CREATION MODE (Unchanged & Preserved!) */}
       {isAddingNewJob ? (
         <div className="flex flex-col gap-1 w-full animate-in fade-in zoom-in-95 duration-200">
           <div className="flex gap-2 w-full">
@@ -243,40 +272,105 @@ export default function ResumeUploader() {
               autoFocus
               value={newJobName}
               onChange={e => { setNewJobName(e.target.value); setJobError(""); }}
-              className={`flex-1 p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all ${jobError ? 'border-red-500' : 'border-blue-500'}`}
+              className={`flex-1 p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all ${jobError ? 'border-red-500' : 'border-blue-500'}`}
               placeholder="e.g. Forklift Operator"
             />
-            <button type="button" onClick={saveNewJobCategory} className="px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold flex items-center gap-1 transition-all">
+            <button type="button" onClick={saveNewJobCategory} className="px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold flex items-center gap-1 transition-all cursor-pointer">
               <CheckCircle2 className="w-4 h-4" /> Save
             </button>
-            <button type="button" onClick={() => { setIsAddingNewJob(false); setJobError(""); }} className="px-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg flex items-center transition-all">
+            <button type="button" onClick={() => { setIsAddingNewJob(false); setJobError(""); }} className="px-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl flex items-center transition-all cursor-pointer">
               <X className="w-4 h-4" />
             </button>
           </div>
           {jobError && <p className="text-xs text-red-500 font-bold">{jobError}</p>}
         </div>
       ) : (
-        <select
-          value={selectedJobCategory}
-          onChange={(e) => {
-            if (e.target.value === "ADD_NEW") {
-              setIsAddingNewJob(true);
-              setSelectedJobCategory("");
-              setJobError("");
-            } else {
-              setSelectedJobCategory(e.target.value);
-            }
-          }}
-          className={`w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all rounded-lg 
-            ${(!selectedJobCategory && status === "success") ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 border'}`}
-        >
-          <option value="">-- Select Category --</option>
-          {jobCategories.map((job) => <option key={job.id} value={job.id}>{job.name}</option>)}
-          <option disabled>──────────</option>
-          <option value="ADD_NEW" className="font-bold text-blue-600 dark:text-blue-400">
-            + Add New Job Category...
-          </option>
-        </select>
+        /* UPGRADED SEARCHABLE COMBOBOX */
+        <div className="relative w-full">
+          {/* Trigger Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsJobDropdownOpen(!isJobDropdownOpen);
+              if (!isJobDropdownOpen) setJobSearchQuery(""); // Clear search when reopening
+            }}
+            className={`w-full p-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all rounded-xl flex items-center justify-between text-left cursor-pointer shadow-2xs
+            ${(!selectedJobCategory && status === "success")
+                ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50'
+                : 'bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800'}`}
+          >
+            <span className={`truncate pr-2 ${!selectedJobCategory ? 'text-slate-400 dark:text-slate-500' : ''}`}>
+              {selectedJobName}
+            </span>
+            <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isJobDropdownOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {/* Dropdown Menu with Search Bar */}
+          {isJobDropdownOpen && (
+            <div className="absolute left-0 top-full mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+
+              {/* Search Input */}
+              <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 relative">
+                <Search className="w-4 h-4 absolute left-4 top-4 text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search category name..."
+                  value={jobSearchQuery}
+                  onChange={(e) => setJobSearchQuery(e.target.value)}
+                  onClick={(e) => e.stopPropagation()} // Prevents clicking input from closing menu
+                  autoFocus
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-750 rounded-lg text-slate-900 dark:text-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium placeholder:text-slate-400 transition-all"
+                />
+              </div>
+
+              {/* Scrollable Category Options */}
+              <div className="max-h-52 overflow-y-auto p-1.5 space-y-0.5 text-xs font-semibold">
+                {filteredJobCategories.length === 0 ? (
+                  <div className="p-4 text-center text-slate-400 dark:text-slate-500 italic font-medium">
+                    No matching category found.
+                  </div>
+                ) : (
+                  filteredJobCategories.map((job) => {
+                    const isSelected = String(job.id) === String(selectedJobCategory) || job.id === selectedJobCategory;
+                    return (
+                      <div
+                        key={job.id}
+                        onClick={() => {
+                          setSelectedJobCategory(job.id);
+                          setIsJobDropdownOpen(false);
+                        }}
+                        className={`px-3 py-2.5 rounded-lg cursor-pointer transition-colors flex items-center justify-between truncate ${isSelected
+                            ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold"
+                            : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80"
+                          }`}
+                      >
+                        <span className="truncate pr-2">{job.name}</span>
+                        {isSelected && <Check className="w-4 h-4 shrink-0" />}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Pinned Action: Add New Category */}
+              <div className="p-1.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
+                <div
+                  onClick={() => {
+                    setIsAddingNewJob(true);
+                    setSelectedJobCategory("");
+                    setJobError("");
+                    setIsJobDropdownOpen(false);
+                  }}
+                  className="px-3 py-2 rounded-lg cursor-pointer transition-colors flex items-center gap-2 text-xs font-extrabold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Add New Job Category...</span>
+                </div>
+              </div>
+
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
