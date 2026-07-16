@@ -14,7 +14,8 @@ import {
     Plus,
     Building2
 } from "lucide-react";
-import { createBrowserClient } from "@supabase/ssr";
+import { getCurrentProfile } from "@/app/actions";
+import { signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import ResumeUploader from "@/components/ResumeUploader";
@@ -26,18 +27,10 @@ export default function Sidebar() {
     const [role, setRole] = useState<string | null>(null);
     const [isUploaderOpen, setIsUploaderOpen] = useState(false);
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
     useEffect(() => {
         const fetchRole = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                const { data } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-                if (data) setRole(data.role);
-            }
+            const profile = await getCurrentProfile();
+            if (profile) setRole(profile.role);
         };
         fetchRole();
     }, []);
@@ -54,9 +47,7 @@ export default function Sidebar() {
     const navItems = allNavItems.filter(item => !item.reqAdmin || isAdmin);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
-        router.push("/login");
-        router.refresh();
+        await signOut({ callbackUrl: "/login" });
     };
 
     return (

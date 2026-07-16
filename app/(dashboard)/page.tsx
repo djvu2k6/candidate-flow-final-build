@@ -8,7 +8,7 @@ import {
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import ResumeUploader from "@/components/ResumeUploader";
 import CandidateTable, { Candidate } from "@/components/CandidateTable";
-import { supabase } from "@/lib/supabase";
+import { getDashboardData } from "@/app/actions";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Link from "next/link";
 
@@ -43,20 +43,11 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [candRes, docsRes, intRes, intAllRes, placeRes, agentsRes] = await Promise.all([
-        supabase.from("candidates").select("*").order("created_at", { ascending: false }),
-        supabase.from("documents").select("*", { count: 'exact', head: true }).eq("status", "Pending"),
-        supabase.from("interviews").select("*", { count: 'exact', head: true }).eq("status", "Scheduled"),
-        supabase.from("interviews").select("created_at"),
-        supabase.from("placements").select("created_at"),
-        supabase.from("agents").select("*").order("created_at", { ascending: false }).limit(5)
-      ]);
-
-      if (candRes.error) throw candRes.error;
-
-      const fetchedCandidates = candRes.data || [];
-      setCandidates(fetchedCandidates);
-      setAgents(agentsRes.data || []);
+      const data = await getDashboardData();
+      
+      const fetchedCandidates = data.candidates || [];
+      setCandidates(fetchedCandidates as any);
+      setAgents(data.agents as any);
 
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
@@ -66,11 +57,11 @@ export default function DashboardPage() {
       };
 
       setMetrics({
-        docsPending: docsRes.count || 0,
-        interviewsScheduled: intRes.count || 0,
-        newThisMonth: fetchedCandidates.filter(c => isThisMonth(c.created_at)).length,
-        interviewsThisMonth: (intAllRes.data || []).filter(i => isThisMonth(i.created_at)).length,
-        placementsThisMonth: (placeRes.data || []).filter(p => isThisMonth(p.created_at)).length
+        docsPending: data.pendingDocsCount || 0,
+        interviewsScheduled: data.scheduledInterviewsCount || 0,
+        newThisMonth: fetchedCandidates.filter(c => isThisMonth(c.created_at as any)).length,
+        interviewsThisMonth: (data.allInterviews || []).filter(i => isThisMonth(i.created_at as any)).length,
+        placementsThisMonth: (data.allPlacements || []).filter(p => isThisMonth(p.created_at as any)).length
       });
 
     } catch (error) {

@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { createClient } from "@supabase/supabase-js";
-
-// 1. Initialize Supabase (Using Anon key is fine here just for reading public/authenticated tables)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { prisma } from "@/lib/db";
 
 // 2. Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -24,12 +19,10 @@ export async function POST(req: NextRequest) {
     const base64Data = Buffer.from(arrayBuffer).toString("base64");
 
     // 3. DYNAMIC BRAIN UPGRADE: Fetch live Job Categories from your database
-    const { data: jobData, error: dbError } = await supabase
-      .from('job_categories')
-      .select('name');
+    const jobData = await prisma.jobCategory.findMany({ select: { name: true } });
 
     let jobListString = "Engineering, Healthcare, Construction"; // Fallback
-    if (jobData && !dbError) {
+    if (jobData && jobData.length > 0) {
       jobListString = jobData.map(j => j.name).join(", ");
     }
 

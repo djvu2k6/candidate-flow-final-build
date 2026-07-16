@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 import { Users, Search, Download, CheckSquare, Square, Loader2, Filter, AlertTriangle, Trash2 } from "lucide-react";
 import { logAction } from "@/lib/audit";
+import { getCurrentProfile, getCandidatesList, bulkDeleteCandidates } from "@/app/actions";
 
 // Helper function to calculate exact age dynamically
 const calculateAge = (dobString: string) => {
@@ -36,52 +36,22 @@ export default function CandidateSectionPage() {
     // Multi-Select State
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
     const fetchData = async () => {
         setLoading(true);
 
         // 1. Get Current User Role
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-            const { data: profileData } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', session.user.id)
-                .single();
-            if (profileData) setCurrentUserRole(profileData.role?.toLowerCase() || "staff");
+        const profileData = await getCurrentProfile();
+        if (profileData) setCurrentUserRole(profileData.role?.toLowerCase() || "staff");
+
+        // 2. Fetch Candidates and Job Categories
+        try {
+            const { candidates: candData, jobCategories: jobsData } = await getCandidatesList();
+            setCandidates(candData);
+            setJobCategories(jobsData);
+        } catch (error) {
+            console.error("Error fetching candidates:", error);
         }
 
-        // 2. Fetch Candidates
-        const { data: candData, error } = await supabase
-            .from("candidates")
-            .select("*")
-            .order("created_at", { ascending: false });
-
-        if (error) console.error("Error fetching candidates:", error);
-
-        // 3. Fetch Agents
-        const { data: agentsData } = await supabase.from("agents").select("id, name");
-
-        // 4. Fetch Job Categories
-        const { data: jobsData } = await supabase.from("job_categories").select("id, name").order("name");
-
-        // 5. Match agents
-        if (candData) {
-            const enrichedCandidates = candData.map(candidate => {
-                const matchedAgent = agentsData?.find(a => a.id === candidate.assigned_agent_id);
-                return {
-                    ...candidate,
-                    agents: matchedAgent ? { name: matchedAgent.name } : null
-                };
-            });
-            setCandidates(enrichedCandidates);
-        }
-
-        if (jobsData) setJobCategories(jobsData);
         setLoading(false);
     };
 
@@ -153,16 +123,7 @@ export default function CandidateSectionPage() {
         const idsToDelete = Array.from(selectedIds);
 
         try {
-            // 1. Wipe all related records first to avoid foreign key constraints
-            await supabase.from("documents").delete().in("candidate_id", idsToDelete);
-            await supabase.from("interviews").delete().in("candidate_id", idsToDelete);
-            await supabase.from("placements").delete().in("candidate_id", idsToDelete);
-
-            // 2. Delete the actual candidates
-            const { error } = await supabase.from("candidates").delete().in("id", idsToDelete);
-
-            if (error) throw error;
-
+            await bulkDeleteCandidates(idsToDelete);
             await logAction("BULK_DELETE", `Admin deleted ${selectedIds.size} candidates from the master table.`);
 
             // 3. Reset state and refresh table

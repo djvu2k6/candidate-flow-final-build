@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { getAgentsAndTeam, addAgent } from "@/app/actions";
 import { Briefcase, Users, UserPlus, Phone, Calendar, Shield, Loader2, Plus, ChevronDown } from "lucide-react";
 
 type Agent = { id: string; name: string; phone: string; created_at: string };
@@ -33,18 +33,15 @@ export default function AgentsAndTeamPage() {
     const [isAdding, setIsAdding] = useState(false);
     const [message, setMessage] = useState({ text: "", type: "" });
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
     const fetchData = async () => {
         setLoading(true);
-        const { data: agentsData } = await supabase.from("agents").select("*").order("created_at", { ascending: false });
-        if (agentsData) setAgents(agentsData);
-
-        const { data: profilesData } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
-        if (profilesData) setTeam(profilesData);
+        try {
+            const data = await getAgentsAndTeam();
+            setAgents(data.agents as any);
+            setTeam(data.team as any);
+        } catch (error) {
+            console.error(error);
+        }
         setLoading(false);
     };
 
@@ -60,18 +57,15 @@ export default function AgentsAndTeamPage() {
         // Combine the country code and the phone number before sending to DB
         const fullPhoneNumber = `${selectedCountryCode} ${newAgentPhone.trim()}`;
 
-        const { error } = await supabase
-            .from("agents")
-            .insert([{ name: newAgentName, phone: fullPhoneNumber }]);
-
-        if (error) {
-            setMessage({ text: error.message, type: "error" });
-        } else {
+        try {
+            await addAgent(newAgentName, fullPhoneNumber);
             setMessage({ text: "Agent added successfully!", type: "success" });
             setNewAgentName("");
             setNewAgentPhone("");
             setSelectedCountryCode("+91"); // Reset back to default
             fetchData();
+        } catch (error: any) {
+            setMessage({ text: error.message || "An error occurred", type: "error" });
         }
         setIsAdding(false);
     };

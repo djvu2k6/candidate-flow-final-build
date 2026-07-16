@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { X, Save, UserPlus, Shield, Loader2, Briefcase } from "lucide-react";
-import { supabase } from "@/lib/supabase";
 import { logAction } from "@/lib/audit";
+import { getMapsData, updateCandidate } from "@/app/actions";
 
 export default function CandidateEditor({ candidate, isOpen, onClose, onRefresh }: any) {
     const [formData, setFormData] = useState<any>({});
@@ -32,14 +32,10 @@ export default function CandidateEditor({ candidate, isOpen, onClose, onRefresh 
     useEffect(() => {
         if (isOpen) {
             const fetchDependencies = async () => {
-                const { data: jobData } = await supabase.from("job_categories").select("id, name").order("name");
-                if (jobData) setJobs(jobData);
-
-                const { data: agentData } = await supabase.from("agents").select("id, name");
-                if (agentData) setAgents(agentData);
-
-                const { data: staffData } = await supabase.from("profiles").select("id, email");
-                if (staffData) setStaff(staffData);
+                const { jobs, agents, staff } = await getMapsData();
+                if (jobs) setJobs(jobs);
+                if (agents) setAgents(agents);
+                if (staff) setStaff(staff);
             };
             fetchDependencies();
         }
@@ -52,21 +48,16 @@ export default function CandidateEditor({ candidate, isOpen, onClose, onRefresh 
         setLoading(true);
 
         try {
-            const { error } = await supabase
-                .from("candidates")
-                .update({
-                    name: formData.name,
-                    email: formData.email,
-                    phone: formData.phone,
-                    current_role: formData.current_role,
-                    passport_number: formData.passport_number,
-                    status: formData.status,
-                    assigned_agent_id: formData.assigned_agent_id || null, // Saves the new Agent
-                    assigned_staff_id: formData.assigned_staff_id || null  // Saves the new Staff
-                })
-                .eq("id", candidate.id);
-
-            if (error) throw error;
+            await updateCandidate(candidate.id, {
+                name: formData.name,
+                email: formData.email,
+                phone: formData.phone,
+                current_role: formData.current_role,
+                passport_number: formData.passport_number,
+                status: formData.status,
+                assigned_agent_id: formData.assigned_agent_id || null, // Saves the new Agent
+                assigned_staff_id: formData.assigned_staff_id || null  // Saves the new Staff
+            });
 
             await logAction("CANDIDATE_UPDATE", `Updated profile assignments for ${formData.name}`);
             onRefresh(); // Forces the table to reload instantly

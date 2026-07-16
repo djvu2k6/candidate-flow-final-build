@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { getCurrentProfile, getCandidateDetails, updateCandidate, deleteCandidate } from "@/app/actions";
 import { ArrowLeft, User, Briefcase, UploadCloud, FileText, MapPin, Edit, Download, ShieldCheck, Camera, Loader2, Mail, Phone, Calendar, Fingerprint, ShieldAlert, Users, StickyNote, Trash2, Home, AlertTriangle, UserPlus, Shield } from "lucide-react";
 import CandidateEditor from "@/components/CandidateEditor";
 import CandidateStatusLog from "@/components/CandidateStatusLog";
@@ -65,11 +65,6 @@ export default function CandidateProfilePage() {
   const [selectedInterview, setSelectedInterview] = useState<any>(null);
   const [isPlacementOpen, setIsPlacementOpen] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   useEffect(() => {
     fetchEverything();
   }, [candidateId]);
@@ -78,36 +73,24 @@ export default function CandidateProfilePage() {
     setLoading(true);
 
     // 1. Fetch current user role for permissions
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single();
-      if (profileData) {
-        setCurrentUserRole(profileData.role?.toLowerCase() || "staff");
-      }
+    const profileData = await getCurrentProfile();
+    if (profileData) {
+      setCurrentUserRole(profileData.role?.toLowerCase() || "staff");
     }
 
-    const { data: candData } = await supabase.from("candidates").select("*").eq("id", candidateId).single();
-    setCandidate(candData);
-
-    const { data: docsData } = await supabase.from("documents").select("*").eq("candidate_id", candidateId).order("created_at", { ascending: false });
-    if (docsData) setDocuments(docsData);
-
-    const { data: intData } = await supabase.from("interviews").select("*").eq("candidate_id", candidateId).order("interview_date", { ascending: true });
-    if (intData) setInterviews(intData);
-
-    const { data: placeData } = await supabase.from("placements").select("*").eq("candidate_id", candidateId).maybeSingle();
-    setPlacement(placeData);
-
-    const { data: agentsData } = await supabase.from("agents").select("id, name, phone");
-    if (agentsData) setAgents(agentsData);
-
-    const { data: staffData } = await supabase.from("profiles").select("id, email");
-    if (staffData) setStaff(staffData);
-
+    try {
+      const { candidate: candData, agents: agentsData, staff: staffData } = await getCandidateDetails(candidateId);
+      if (candData) {
+        setCandidate(candData);
+        setDocuments(candData.documents || []);
+        setInterviews(candData.interviews || []);
+        setPlacement(candData.placements?.[0] || null); // Assuming 1 placement for now
+      }
+      setAgents(agentsData);
+      setStaff(staffData);
+    } catch (err) {
+      console.error(err);
+    }
     setLoading(false);
   };
 
@@ -117,12 +100,20 @@ export default function CandidateProfilePage() {
     setIsUploadingDoc(true);
 
     try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "documents");
+
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
       // A. Create a clean document object
       const newDoc = {
         id: Date.now().toString(),
         title: file.name,
         status: "Verified",
-        file_url: URL.createObjectURL(file), // Local preview URL
+        file_url: data.url, // Persistent local URL
         uploaded_at: new Date().toISOString()
       };
 
@@ -130,13 +121,13 @@ export default function CandidateProfilePage() {
       const updatedDocs = [...(documents || []), newDoc];
       setDocuments(updatedDocs);
 
-      // C. Save directly to Supabase candidate record
+      // C. Save directly to Prisma candidate record
       const updatedInfo = {
         ...(candidate.additional_info || {}),
         documents_detected: updatedDocs
       };
 
-      await supabase.from("candidates").update({ additional_info: updatedInfo }).eq("id", candidateId);
+      await updateCandidate(candidateId, { additional_info: updatedInfo });
       setCandidate((prev: any) => ({ ...prev, additional_info: updatedInfo }));
     } catch (err: any) {
       alert("Upload failed: " + err.message);
@@ -146,8 +137,9 @@ export default function CandidateProfilePage() {
   };
   const handleAssignAgent = async (agentId: string) => {
     const dbAgentId = agentId === "" ? null : agentId;
-    const { error } = await supabase.from("candidates").update({ assigned_agent_id: dbAgentId }).eq("id", candidateId);
-    if (error) {
+    try {
+      await updateCandidate(candidateId, { assigned_agent_id: dbAgentId });
+    } catch (error: any) {
       alert(`Database Error: ${error.message}`);
       return;
     }
@@ -158,8 +150,9 @@ export default function CandidateProfilePage() {
 
   const handleAssignStaff = async (staffId: string) => {
     const dbStaffId = staffId === "" ? null : staffId;
-    const { error } = await supabase.from("candidates").update({ assigned_staff_id: dbStaffId }).eq("id", candidateId);
-    if (error) {
+    try {
+      await updateCandidate(candidateId, { assigned_staff_id: dbStaffId });
+    } catch (error: any) {
       alert(`Database Error: ${error.message}`);
       return;
     }
@@ -169,7 +162,7 @@ export default function CandidateProfilePage() {
   };
 
   const handleStatusChange = async (newStatus: string) => {
-    await supabase.from("candidates").update({ status: newStatus }).eq("id", candidateId);
+    await updateCandidate(candidateId, { status: newStatus });
     await logAction("CANDIDATE_EDIT", `Updated placement status of candidate ${candidate.name} to '${newStatus}'`);
     fetchEverything();
   };
@@ -179,29 +172,38 @@ export default function CandidateProfilePage() {
     if (!file || !candidate) return;
 
     setIsUploadingAvatar(true);
-    const fileExt = file.name.split('.').pop();
-    const filePath = `${candidateId}/avatar_${Date.now()}.${fileExt}`;
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("folder", "avatars");
 
-    const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, file);
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
 
-    if (!uploadError) {
-      const { data: publicUrlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
-      await supabase.from("candidates").update({ avatar_url: publicUrlData.publicUrl }).eq("id", candidateId);
+      await updateCandidate(candidateId, { avatar_url: data.url });
       fetchEverything();
+    } catch (error) {
+      console.error("Avatar upload failed:", error);
     }
+
     setIsUploadingAvatar(false);
   };
 
   const handleDeleteCandidate = async () => {
     if (!confirm(`Are you sure you want to permanently delete ${candidate.name}? This cannot be undone.`)) return;
 
-    await supabase.from("documents").delete().eq("candidate_id", candidateId);
-    await supabase.from("interviews").delete().eq("candidate_id", candidateId);
-    await supabase.from("placements").delete().eq("candidate_id", candidateId);
-    await supabase.from("candidates").delete().eq("id", candidateId);
-    await logAction("CANDIDATE_DELETE", `Deleted candidate ${candidate.name} (ID: ${candidateId})`);
-
-    router.push("/candidate-section");
+    try {
+      await deleteCandidate(candidateId);
+      await logAction("CANDIDATE_DELETE", `Deleted candidate ${candidate.name} (ID: ${candidateId})`);
+      router.push("/candidate-section");
+    } catch (error) {
+      alert("Error deleting candidate.");
+    }
   };
 
   const handleGeneratePDF = async () => {
@@ -244,7 +246,7 @@ export default function CandidateProfilePage() {
       documents_detected: updatedDocs
     };
 
-    await supabase.from("candidates").update({ additional_info: updatedInfo }).eq("id", candidateId);
+    await updateCandidate(candidateId, { additional_info: updatedInfo });
     setCandidate((prev: any) => ({ ...prev, additional_info: updatedInfo }));
   };
 

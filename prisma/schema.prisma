@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// NextAuth Required Models
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// This maps to both NextAuth User and Supabase `profiles`
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  
+  // From Supabase profiles
+  role          String    @default("employee") // 'admin', 'employee'
+  permissions   Json?     @default("{\"can_export_excel\": false, \"can_manage_agents\": false, \"can_add_candidates\": true, \"can_edit_candidates\": true, \"can_delete_candidates\": false}")
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  
+  // Relations mapped from Supabase
+  candidates    Candidate[] @relation("StaffResponsible")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Application Models
+model Agent {
+  id         String      @id @default(cuid())
+  name       String
+  email      String?
+  phone      String?
+  created_at DateTime    @default(now())
+  
+  // A candidate can have an agent_id and assigned_agent_id
+  candidates        Candidate[] @relation("Agent")
+  assignedCandidates Candidate[] @relation("AssignedAgent")
+}
+
+model JobCategory {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  created_at DateTime    @default(now())
+  
+  // In the SQL, JobCategory wasn't explicitly linked in candidates table (maybe by name or missing FK). 
+  // We'll link it by name for now, or keep the relation if we changed it earlier.
+  // Actually, candidates table in SQL doesn't have job_category_id, it has `current_role text`.
+  // So JobCategory is just a reference list.
+}
+
+model Candidate {
+  id                        String    @id @default(cuid())
+  candidate_id              String?   @unique // The string ID
+  name                      String
+  email                     String?
+  phone                     String?
+  current_role              String?
+  country                   String?
+  skills                    String[]
+  experience_years          Int?
+  education                 String?
+  visa_track_recommendation String?
+  status                    String    @default("AI Parsed")
+  created_at                DateTime  @default(now())
+  dob                       DateTime? @db.Date
+  passport_number           String?   @unique
+  nationality               String?
+  photo_url                 String?
+  destination_country       String?
+  additional_info           Json?     @default("{}")
+  avatar_url                String?
+  gender                    String?
+  notes                     String?
+  address                   String?
+
+  // Foreign keys
+  agent_id                  String?
+  assigned_agent_id         String?
+  assigned_staff_id         String?
+
+  agent                     Agent?    @relation("Agent", fields: [agent_id], references: [id])
+  assigned_agent            Agent?    @relation("AssignedAgent", fields: [assigned_agent_id], references: [id])
+  assigned_staff            User?     @relation("StaffResponsible", fields: [assigned_staff_id], references: [id])
+  
+  placements                Placement[]
+  interviews                Interview[]
+  documents                 Document[]
+  statusLogs                CandidateStatusLog[]
+}
+
+model Placement {
+  id                       String   @id @default(cuid())
+  candidate_id             String
+  employer_name            String
+  job_title                String
+  destination_country      String
+  start_date               DateTime @db.Date
+  contract_duration_months Int?
+  created_at               DateTime @default(now())
+
+  candidate                Candidate @relation(fields: [candidate_id], references: [id], onDelete: Cascade)
+}
+
+model Interview {
+  id             String   @id @default(cuid())
+  candidate_id   String
+  interview_date DateTime
+  status         String   @default("Scheduled")
+  notes          String?
+  interview_type String   @default("General")
+  created_at     DateTime @default(now())
+
+  candidate      Candidate @relation(fields: [candidate_id], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id           String    @id @default(cuid())
+  candidate_id String
+  title        String
+  file_url     String?
+  status       String    @default("Pending")
+  expiry_date  DateTime? @db.Date
+  created_at   DateTime  @default(now())
+
+  candidate    Candidate @relation(fields: [candidate_id], references: [id], onDelete: Cascade)
+}
+
+model CandidateStatusLog {
+  id              String   @id @default(cuid())
+  candidate_id    String
+  status_label    String
+  note            String?
+  created_by      String?
+  created_at      DateTime @default(now())
+
+  candidate       Candidate @relation(fields: [candidate_id], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  user_name  String
+  action     String
+  details    String?
+  created_at DateTime @default(now())
+}

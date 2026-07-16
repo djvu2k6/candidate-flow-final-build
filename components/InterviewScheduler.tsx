@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { supabase } from "@/lib/supabase";
 import { logAction } from "@/lib/audit";
+import { addInterview, updateInterview } from "@/app/actions";
 import { Loader2, Calendar } from "lucide-react";
 
 interface InterviewSchedulerProps {
@@ -59,34 +59,25 @@ export default function InterviewScheduler({
 
             if (interview) {
                 // Edit mode
-                const { error } = await supabase
-                    .from("interviews")
-                    .update({
-                        interview_date: formattedDate,
-                        interview_type: interviewType,
-                        status: status,
-                        notes: notes
-                    })
-                    .eq("id", interview.id);
-
-                if (error) throw error;
+                await updateInterview(interview.id, {
+                    interview_date: formattedDate,
+                    interview_type: interviewType,
+                    status: status,
+                    notes: notes
+                });
                 await logAction(
                     "INTERVIEW_EDIT",
                     `Updated interview (${interviewType}) to status '${status}' for candidate ${candidateName}`
                 );
             } else {
                 // Add mode
-                const { error } = await supabase
-                    .from("interviews")
-                    .insert([{
-                        candidate_id: candidateId,
-                        interview_date: formattedDate,
-                        interview_type: interviewType,
-                        status: status,
-                        notes: notes
-                    }]);
-
-                if (error) throw error;
+                await addInterview({
+                    candidate_id: candidateId,
+                    interview_date: formattedDate,
+                    interview_type: interviewType,
+                    status: status,
+                    notes: notes
+                });
                 await logAction(
                     "INTERVIEW_SCHEDULED",
                     `Scheduled a new interview (${interviewType}) on ${new Date(interviewDate).toLocaleString()} for candidate ${candidateName}`

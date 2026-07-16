@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { getJobCategories, addJobCategory, updateJobCategory, deleteJobCategory } from "@/app/actions";
 import { Briefcase, Plus, Loader2, Edit2, Trash2, Check, X, Building2 } from "lucide-react";
 
 export default function JobCategoriesPage() {
@@ -16,20 +16,14 @@ export default function JobCategoriesPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState("");
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
     const fetchCategories = async () => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from("job_categories")
-            .select("*")
-            .order("name", { ascending: true });
-
-        if (data) setCategories(data);
-        if (error) console.error("Error fetching categories:", error);
+        try {
+            const data = await getJobCategories();
+            setCategories(data);
+        } catch (error) {
+            console.error("Error fetching categories:", error);
+        }
         setLoading(false);
     };
 
@@ -47,47 +41,36 @@ export default function JobCategoriesPage() {
             return;
         }
 
-        const { error } = await supabase
-            .from("job_categories")
-            .insert([{ name: newCategoryName.trim() }]);
-
-        if (error) {
-            alert("Error adding category: " + error.message);
-        } else {
+        try {
+            await addJobCategory(newCategoryName.trim());
             setNewCategoryName("");
             setIsAdding(false);
             fetchCategories();
+        } catch (error: any) {
+            alert("Error adding category: " + error.message);
         }
     };
 
     const handleUpdateCategory = async (id: string) => {
         if (!editName.trim()) return;
 
-        const { error } = await supabase
-            .from("job_categories")
-            .update({ name: editName.trim() })
-            .eq("id", id);
-
-        if (error) {
-            alert("Error updating category: " + error.message);
-        } else {
+        try {
+            await updateJobCategory(id, editName.trim());
             setEditingId(null);
             fetchCategories();
+        } catch (error: any) {
+            alert("Error updating category: " + error.message);
         }
     };
 
     const handleDeleteCategory = async (id: string, name: string) => {
         if (!confirm(`Are you sure you want to delete the category "${name}"? Candidates with this role will keep it as plain text, but it will be removed from all dropdowns.`)) return;
 
-        const { error } = await supabase
-            .from("job_categories")
-            .delete()
-            .eq("id", id);
-
-        if (error) {
-            alert("Error deleting category: " + error.message);
-        } else {
+        try {
+            await deleteJobCategory(id);
             fetchCategories();
+        } catch (error: any) {
+            alert("Error deleting category: " + error.message);
         }
     };
 

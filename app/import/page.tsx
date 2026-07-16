@@ -1,6 +1,6 @@
 "use client";
 
-import { supabase } from "@/lib/supabase";
+import { bulkImportCandidates } from "@/app/actions";
 import { useState } from "react";
 import Papa from "papaparse";
 import { UploadCloud, FileText, CheckCircle, AlertCircle, SkipForward } from "lucide-react";
@@ -34,49 +34,12 @@ export default function BulkImportPage() {
           const rows = results.data as any[];
           setStatus({ type: "", message: `Found ${rows.length} rows. Processing...` });
 
-          let inserted = 0;
-          let skipped = 0;
-          const skippedNames: string[] = [];
+          const importSummary = await bulkImportCandidates(rows);
 
-          for (const row of rows) {
-            const passportNumber = row['Passport Number']?.trim() || null;
-            const candidateName = row['Full Name']?.trim() || 'Unknown';
-
-            // Check for duplicate passport number
-            if (passportNumber) {
-              const { data: existing } = await supabase
-                .from('candidates')
-                .select('id')
-                .eq('passport_number', passportNumber)
-                .maybeSingle();
-
-              if (existing) {
-                skipped++;
-                skippedNames.push(candidateName);
-                continue;
-              }
-            }
-
-            const { error } = await supabase.from('candidates').insert({
-              name: candidateName,
-              passport_number: passportNumber,
-              gender: row['Gender']?.trim() || null,
-              nationality: row['Nationality']?.trim() || null,
-              current_role: row['Job Title']?.trim() || null,
-              skills: row['Skills'] ? row['Skills'].split(',').map((s: string) => s.trim()) : [],
-              destination_country: row['Preferred Country']?.trim() || null,
-              phone: row['Phone']?.trim() || null,
-              additional_info: { marital_status: row['Marital Status']?.trim() || null },
-              status: 'New',
-            });
-
-            if (!error) inserted++;
-          }
-
-          setImportSummary({ inserted, skipped, skippedNames });
+          setImportSummary(importSummary);
           setStatus({
             type: 'success',
-            message: `Import complete — ${inserted} added, ${skipped} skipped.`,
+            message: `Import complete — ${importSummary.inserted} added, ${importSummary.skipped} skipped.`,
           });
           setFile(null);
         } catch (error: any) {

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { signIn } from "next-auth/react";
 import { Lock, Mail, ShieldCheck } from "lucide-react";
 
 export default function LoginPage() {
@@ -12,24 +12,19 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Initialize the SSR-compatible Browser Client (This sets the COOKIE!)
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const res = await signIn("credentials", {
+      redirect: false,
       email,
       password,
     });
 
-    if (error) {
-      setError(error.message);
+    if (res?.error) {
+      setError("Invalid email or password");
       setLoading(false);
     } else {
       // Success! Reset loading and redirect

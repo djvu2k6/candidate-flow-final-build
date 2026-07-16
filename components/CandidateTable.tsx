@@ -6,7 +6,7 @@ import * as XLSX from "xlsx";
 import { useRouter } from "next/navigation";
 import CandidateEditor from "./CandidateEditor";
 import { logAction } from "@/lib/audit";
-import { supabase } from "@/lib/supabase";
+import { getMapsData } from "@/app/actions";
 import { Check, ChevronDown } from "lucide-react";
 
 export interface Candidate {
@@ -87,23 +87,24 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
   useEffect(() => { staffMapRef.current = staffMap; }, [staffMap]);
 
   const loadMaps = async () => {
-    const { data: jobs } = await supabase.from("job_categories").select("id, name").order("name");
-    if (jobs) setJobCategories(jobs);
+    try {
+      const { jobs, agents, staff } = await getMapsData();
 
-    const { data: agents } = await supabase.from("agents").select("id, name");
-    if (agents) {
-      const aMap: Record<string, string> = {};
-      // Strictly map by string
-      agents.forEach(a => { aMap[String(a.id)] = a.name; });
-      setAgentsMap(aMap);
-    }
+      if (jobs) setJobCategories(jobs);
 
-    const { data: staff } = await supabase.from("profiles").select("id, email");
-    if (staff) {
-      const sMap: Record<string, string> = {};
-      // Strictly map by string
-      staff.forEach(s => { sMap[String(s.id)] = s.email; });
-      setStaffMap(sMap);
+      if (agents) {
+        const aMap: Record<string, string> = {};
+        agents.forEach(a => { aMap[String(a.id)] = a.name; });
+        setAgentsMap(aMap);
+      }
+
+      if (staff) {
+        const sMap: Record<string, string> = {};
+        staff.forEach(s => { sMap[String(s.id)] = s.email || 'Unknown'; });
+        setStaffMap(sMap);
+      }
+    } catch (error) {
+      console.error("Failed to load maps:", error);
     }
   };
 

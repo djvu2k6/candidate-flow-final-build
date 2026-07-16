@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { supabase } from "@/lib/supabase";
 import { logAction } from "@/lib/audit";
+import { addPlacement, updatePlacement } from "@/app/actions";
 import { Loader2, Briefcase } from "lucide-react";
 
 interface PlacementLoggerProps {
@@ -54,42 +54,27 @@ export default function PlacementLogger({
         try {
             if (placement) {
                 // Edit mode
-                const { error } = await supabase
-                    .from("placements")
-                    .update({
-                        employer_name: employerName,
-                        job_title: jobTitle,
-                        destination_country: destinationCountry,
-                        start_date: startDate,
-                        contract_duration_months: parseInt(contractDuration) || 24
-                    })
-                    .eq("id", placement.id);
-
-                if (error) throw error;
+                await updatePlacement(placement.id, {
+                    employer_name: employerName,
+                    job_title: jobTitle,
+                    destination_country: destinationCountry,
+                    start_date: startDate,
+                    contract_duration_months: parseInt(contractDuration) || 24
+                });
                 await logAction(
                     "PLACEMENT_EDIT",
                     `Updated placement details at ${employerName} for candidate ${candidateName}`
                 );
             } else {
                 // Add mode
-                const { error } = await supabase
-                    .from("placements")
-                    .insert([{
-                        candidate_id: candidateId,
-                        employer_name: employerName,
-                        job_title: jobTitle,
-                        destination_country: destinationCountry,
-                        start_date: startDate,
-                        contract_duration_months: parseInt(contractDuration) || 24
-                    }]);
-
-                if (error) throw error;
-                
-                // Also update the candidate's status to "Placed" automatically!
-                await supabase
-                    .from("candidates")
-                    .update({ status: "Placed" })
-                    .eq("id", candidateId);
+                await addPlacement({
+                    candidate_id: candidateId,
+                    employer_name: employerName,
+                    job_title: jobTitle,
+                    destination_country: destinationCountry,
+                    start_date: startDate,
+                    contract_duration_months: parseInt(contractDuration) || 24
+                });
 
                 await logAction(
                     "PLACEMENT_LOGGED",

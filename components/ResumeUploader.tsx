@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { UploadCloud, Loader2, CheckCircle2, AlertCircle, Edit3, Database, UserPlus, FileText, Shield, Plus, X, AlertTriangle, Search, ChevronDown, Check } from "lucide-react";
-import { supabase } from "@/lib/supabase";
 import { logAction } from "@/lib/audit";
+import { getMapsData, addJobCategory, addCandidate } from "@/app/actions";
 
 
 // Helper function to dynamically calculate age
@@ -55,14 +55,10 @@ export default function ResumeUploader() {
 
   useEffect(() => {
     const fetchDependencies = async () => {
-      const { data: agentsData } = await supabase.from('agents').select('id, name');
-      if (agentsData) setAgents(agentsData);
-
-      const { data: staffData } = await supabase.from('profiles').select('id, email');
-      if (staffData) setStaff(staffData);
-
-      const { data: jobData } = await supabase.from('job_categories').select('id, name').order('name');
-      if (jobData) setJobCategories(jobData);
+      const { agents, staff, jobs } = await getMapsData();
+      if (agents) setAgents(agents);
+      if (staff) setStaff(staff);
+      if (jobs) setJobCategories(jobs);
     };
     fetchDependencies();
   }, []);
@@ -185,15 +181,10 @@ export default function ResumeUploader() {
     setJobError("");
 
     try {
-      const { data, error } = await supabase
-        .from('job_categories')
-        .insert([{ name: trimmedName }])
-        .select();
-
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setJobCategories(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
-        setSelectedJobCategory(data[0].id);
+      const data = await addJobCategory(trimmedName);
+      if (data) {
+        setJobCategories(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+        setSelectedJobCategory(data.id);
         setNewJobName("");
         setIsAddingNewJob(false);
       }
@@ -209,32 +200,28 @@ export default function ResumeUploader() {
     try {
       const selectedJob = jobCategories.find(j => j.id === selectedJobCategory);
 
-      const { error } = await supabase
-        .from('candidates')
-        .insert([{
-          name: parsedData.name,
-          email: parsedData.email,
-          phone: parsedData.phone,
-          address: parsedData.address,
-          current_role: selectedJob?.name || "Uncategorized",
-          passport_number: parsedData.passport,
-          dob: parsedData.dob || null,
-          destination_country: parsedData.destination,
-          skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
-          experience_years: parseInt(parsedData.experienceYears) || 0,
-          education: parsedData.education,
-          gender: parsedData.gender || null,
-          additional_info: {
-            notes: parsedData.additionalInfo,
-            passport_expiry: parsedData.passportExpiry || null,
-            documents_detected: parsedData.documentsFound || []
-          },
-          status: "Pending",
-          assigned_agent_id: selectedAgentId || null,
-          assigned_staff_id: selectedStaffId || null
-        }]);
-
-      if (error) throw error;
+      await addCandidate({
+        name: parsedData.name,
+        email: parsedData.email,
+        phone: parsedData.phone,
+        address: parsedData.address,
+        current_role: selectedJob?.name || "Uncategorized",
+        passport_number: parsedData.passport,
+        dob: parsedData.dob || null,
+        destination_country: parsedData.destination,
+        skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
+        experience_years: parseInt(parsedData.experienceYears) || 0,
+        education: parsedData.education,
+        gender: parsedData.gender || null,
+        additional_info: {
+          notes: parsedData.additionalInfo,
+          passport_expiry: parsedData.passportExpiry || null,
+          documents_detected: parsedData.documentsFound || []
+        },
+        status: "Pending",
+        assigned_agent_id: selectedAgentId || null,
+        assigned_staff_id: selectedStaffId || null
+      });
       await logAction("CANDIDATE_UPLOAD", `Uploaded candidate ${parsedData.name}`);
       setStatus("saved");
     } catch (error) {

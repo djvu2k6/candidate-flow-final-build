@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import { logAction } from "@/lib/audit";
+import { getCandidateStatusLogs, addCandidateStatusLog, getCurrentProfile } from "@/app/actions";
 import { Plus, Loader2, CheckCircle2, Clock, XCircle, Briefcase, FileCheck, Globe, Pause, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 
 interface StatusLogEntry {
@@ -53,12 +53,8 @@ export default function CandidateStatusLog({ candidateId, candidateName }: Candi
     const [newNote, setNewNote] = useState("");
 
     const fetchLogs = async () => {
-        const { data } = await supabase
-            .from("candidate_status_logs")
-            .select("*")
-            .eq("candidate_id", candidateId)
-            .order("created_at", { ascending: false });
-        if (data) setLogs(data);
+        const data = await getCandidateStatusLogs(candidateId);
+        if (data) setLogs(data as unknown as StatusLogEntry[]);
         setLoading(false);
     };
 
@@ -69,17 +65,15 @@ export default function CandidateStatusLog({ candidateId, candidateName }: Candi
     const handleAdd = async () => {
         setIsSaving(true);
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            const createdBy = user?.email || "System";
+            const profile = await getCurrentProfile();
+            const createdBy = profile?.email || "System";
 
-            const { error } = await supabase.from("candidate_status_logs").insert([{
+            await addCandidateStatusLog({
                 candidate_id: candidateId,
                 status_label: newStatus,
                 note: newNote.trim() || null,
                 created_by: createdBy,
-            }]);
-
-            if (error) throw error;
+            });
 
             await logAction(
                 "STATUS_LOG_ADDED",
