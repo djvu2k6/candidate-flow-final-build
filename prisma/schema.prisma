@@ -1,9 +1,10 @@
 generator client {
   provider = "prisma-client-js"
+  engineType = "library" // Tells Prisma to run cleanly inside standard Node.js servers
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
 }
 
 // NextAuth Required Models
@@ -95,9 +96,9 @@ model Candidate {
   email                     String?
   phone                     String?
   current_role              String?
-  country                   String?
-  skills                    String[]
-  experience_years          Int?
+  country                  String?
+  skills                   Json?      // <--- Changed from String[] to Json? for MySQL compatibility!
+  experience_years         Int?
   education                 String?
   visa_track_recommendation String?
   status                    String    @default("AI Parsed")
