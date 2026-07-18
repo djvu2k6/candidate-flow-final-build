@@ -1,8 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 
-// 1. Grab your connection string (with %25 replacing the % in your password!)
-const connectionString = process.env.DATABASE_URL ;
+// Clean & Secure: No hardcoded credentials left in the source code!
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error("DATABASE_URL environment variable is missing!");
+}
 
 // 2. Initialize the Prisma MariaDB Adapter
 const adapter = new PrismaMariaDb(connectionString);
