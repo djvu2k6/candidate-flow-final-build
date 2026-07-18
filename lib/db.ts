@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 
 // 1. Grab your connection string (with %25 replacing the % in your password!)
-const connectionString = process.env.DATABASE_URL || "mysql://absorbs_admin:absorbs%25123@abrobs.com:3306/abrobsco_";
+const connectionString = process.env.DATABASE_URL ;
 
 // 2. Initialize the Prisma MariaDB Adapter
 const adapter = new PrismaMariaDb(connectionString);
