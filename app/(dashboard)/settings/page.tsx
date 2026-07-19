@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import {
   Settings as SettingsIcon, Shield, UserPlus, Mail, Lock,
@@ -15,27 +14,26 @@ export default function SettingsPage() {
 
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [newRole, setNewRole] = useState("employee");
+  const [newRole, setNewRole] = useState("EMPLOYEE");
 
-  // Use our centralized default permissions
   const [permissions, setPermissions] = useState<UserPermissions>(DEFAULT_EMPLOYEE_PERMISSIONS);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   useEffect(() => {
     const loadProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-        setProfile(data);
+      try {
+        // Fetch current logged-in user profile from our API / NextAuth session
+        const res = await fetch("/api/auth/session");
+        const session = await res.json();
+        if (session?.user) {
+          setProfile(session.user);
+        }
+      } catch (error) {
+        console.error("Error loading profile:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     loadProfile();
   }, []);
@@ -65,7 +63,7 @@ export default function SettingsPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || "Failed to create user");
 
       setMessage({ text: "System user added successfully with customized permissions!", type: "success" });
       setNewEmail("");
@@ -80,11 +78,9 @@ export default function SettingsPage() {
 
   if (loading) return <div className="p-8 font-bold text-slate-500">Loading settings...</div>;
 
-  // Evaluate if current user can see Job Categories link
-  const showJobCategories = canAccessJobCategories(profile);
-
-  // Normalize role check to prevent uppercase/lowercase DB mismatches
-  const isAdmin = profile?.role?.toLowerCase() === "admin";
+  // Case-insensitive check to support both 'ADMIN' and 'admin'
+  const isAdmin = profile?.role?.toUpperCase() === "ADMIN";
+  const showJobCategories = canAccessJobCategories(profile) || isAdmin;
 
   return (
     <div className="pt-6 sm:pt-8 px-4 sm:px-8 pb-12 max-w-4xl mx-auto w-full transition-all duration-300">
@@ -118,7 +114,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* System Data: Job Categories (Visible to Admins AND authorized Employees!) */}
+        {/* System Data: Job Categories */}
         {showJobCategories && (
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm transition-colors duration-300">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
@@ -167,13 +163,13 @@ export default function SettingsPage() {
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">System Role</label>
                 <select value={newRole} onChange={e => setNewRole(e.target.value)} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold transition-all">
-                  <option value="employee">Internal Employee</option>
-                  <option value="admin">System Admin</option>
+                  <option value="EMPLOYEE">Internal Employee</option>
+                  <option value="ADMIN">System Admin</option>
                 </select>
               </div>
 
               {/* GRANULAR PERMISSIONS GRID (Only mounts for Employees) */}
-              {newRole === "employee" && (
+              {newRole.toUpperCase() === "EMPLOYEE" && (
                 <div className="p-4 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                   <label className="flex items-center gap-2 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
                     <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Explicit Feature Permissions
