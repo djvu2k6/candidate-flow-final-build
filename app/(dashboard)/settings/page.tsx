@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { getCurrentProfile } from "@/app/actions";
+import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import {
   Settings as SettingsIcon, Shield, UserPlus, Mail, Lock,
@@ -23,10 +23,18 @@ export default function SettingsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
 
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
   useEffect(() => {
     const loadProfile = async () => {
-      const profileData = await getCurrentProfile();
-      setProfile(profileData);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+        setProfile(data);
+      }
       setLoading(false);
     };
     loadProfile();
@@ -75,6 +83,9 @@ export default function SettingsPage() {
   // Evaluate if current user can see Job Categories link
   const showJobCategories = canAccessJobCategories(profile);
 
+  // Normalize role check to prevent uppercase/lowercase DB mismatches
+  const isAdmin = profile?.role?.toLowerCase() === "admin";
+
   return (
     <div className="pt-6 sm:pt-8 px-4 sm:px-8 pb-12 max-w-4xl mx-auto w-full transition-all duration-300">
       <div className="mb-8">
@@ -99,8 +110,8 @@ export default function SettingsPage() {
             <div>
               <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-1.5 uppercase tracking-wider">Access Role</label>
               <div className="mt-1">
-                <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-extrabold border ${profile?.role === 'admin' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 border-blue-100 dark:border-blue-800/60' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/60'}`}>
-                  {profile?.role === 'admin' ? 'System Admin' : 'Internal Employee'}
+                <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-extrabold border ${isAdmin ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 border-blue-100 dark:border-blue-800/60' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/60'}`}>
+                  {isAdmin ? 'System Admin' : 'Internal Employee'}
                 </span>
               </div>
             </div>
@@ -129,7 +140,7 @@ export default function SettingsPage() {
         )}
 
         {/* Admin Section: Add User & Granular RBAC */}
-        {profile?.role === "admin" && (
+        {isAdmin && (
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm transition-colors duration-300">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
               <UserPlus className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" /> Add New System User
