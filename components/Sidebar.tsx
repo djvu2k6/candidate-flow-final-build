@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
     LayoutDashboard,
@@ -12,10 +13,10 @@ import {
     X,
     Briefcase,
     Plus,
-    Building2
 } from "lucide-react";
 import { getCurrentProfile } from "@/app/actions";
 import { signOut } from "next-auth/react";
+import { useTheme } from "next-themes";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import ResumeUploader from "@/components/ResumeUploader";
@@ -26,6 +27,14 @@ export default function Sidebar() {
     const [isOpen, setIsOpen] = useState(false);
     const [role, setRole] = useState<string | null>(null);
     const [isUploaderOpen, setIsUploaderOpen] = useState(false);
+    const { resolvedTheme } = useTheme();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => { setMounted(true); }, []);
+
+    const logoSrc = mounted && resolvedTheme === "dark"
+        ? "/logo_image_darkmode.png"
+        : "/logo_image_lightmode.png";
 
     useEffect(() => {
         const fetchRole = async () => {
@@ -70,8 +79,15 @@ export default function Sidebar() {
                     onClick={() => setIsOpen(false)}
                     className="h-[84px] flex items-center px-6 border-b border-slate-100 dark:border-slate-800 shrink-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
                 >
-                    <div className="w-10 h-10 bg-slate-900 dark:bg-blue-600 rounded-lg flex items-center justify-center mr-3 shrink-0 shadow-sm transition-colors duration-200">
-                        <Building2 className="w-6 h-6 text-white" />
+                    <div className="w-10 h-10 mr-3 shrink-0 flex items-center justify-center">
+                        <Image
+                            src={logoSrc}
+                            alt="Clockwise Consultancy Logo"
+                            width={40}
+                            height={40}
+                            className="object-contain rounded-lg"
+                            priority
+                        />
                     </div>
                     <div className="flex flex-col">
                         <span className="text-[14px] font-black text-slate-900 dark:text-white leading-tight">Clockwise</span>

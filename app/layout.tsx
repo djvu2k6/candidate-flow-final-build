@@ -8,6 +8,18 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "CandidateFlow Pro",
   description: "Enterprise Immigration Management",
+  icons: {
+    icon: [
+      {
+        url: "/logo_image_lightmode.png",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        url: "/logo_image_darkmode.png",
+        media: "(prefers-color-scheme: dark)",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({
