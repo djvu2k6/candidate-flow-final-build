@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getCurrentProfile, getCandidateDetails, updateCandidate, deleteCandidate } from "@/app/actions";
+import { getCurrentProfile, getCandidateDetails, updateCandidate, deleteCandidate, addDocument, deleteDocument } from "@/app/actions";
 import { ArrowLeft, User, Briefcase, UploadCloud, FileText, MapPin, Edit, Download, ShieldCheck, Camera, Loader2, Mail, Phone, Calendar, Fingerprint, ShieldAlert, Users, StickyNote, Trash2, Home, AlertTriangle, UserPlus, Shield } from "lucide-react";
 import CandidateEditor from "@/components/CandidateEditor";
 import CandidateStatusLog from "@/components/CandidateStatusLog";
@@ -100,39 +100,26 @@ export default function CandidateProfilePage() {
     setIsUploadingDoc(true);
 
     try {
+      // Step 1: Upload the file to the server
       const formData = new FormData();
       formData.append("file", file);
       formData.append("folder", "documents");
 
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || "Upload failed");
 
-      // A. Create a clean document object
-      const newDoc = {
-        id: Date.now().toString(),
-        title: file.name,
-        status: "Verified",
-        file_url: data.url, // Persistent local URL
-        uploaded_at: new Date().toISOString()
-      };
+      // Step 2: Save the document record to the Prisma Document table
+      const newDoc = await addDocument(candidateId, file.name, data.url);
 
-      // B. Append to existing documents list
-      const updatedDocs = [...(documents || []), newDoc];
-      setDocuments(updatedDocs);
-
-      // C. Save directly to Prisma candidate record
-      const updatedInfo = {
-        ...(candidate.additional_info || {}),
-        documents_detected: updatedDocs
-      };
-
-      await updateCandidate(candidateId, { additional_info: updatedInfo });
-      setCandidate((prev: any) => ({ ...prev, additional_info: updatedInfo }));
+      // Step 3: Update local state so UI reflects immediately
+      setDocuments((prev: any[]) => [...prev, newDoc]);
     } catch (err: any) {
       alert("Upload failed: " + err.message);
     } finally {
       setIsUploadingDoc(false);
+      // Reset file input so same file can be re-uploaded if needed
+      e.target.value = "";
     }
   };
   const handleAssignAgent = async (agentId: string) => {
@@ -238,16 +225,12 @@ export default function CandidateProfilePage() {
 
   const handleDeleteDoc = async (docIdToDelete: string) => {
     if (!canEdit) return;
-    const updatedDocs = documents.filter((d: any) => d.id !== docIdToDelete);
-    setDocuments(updatedDocs);
-
-    const updatedInfo = {
-      ...(candidate.additional_info || {}),
-      documents_detected: updatedDocs
-    };
-
-    await updateCandidate(candidateId, { additional_info: updatedInfo });
-    setCandidate((prev: any) => ({ ...prev, additional_info: updatedInfo }));
+    try {
+      await deleteDocument(docIdToDelete);
+      setDocuments((prev: any[]) => prev.filter((d: any) => d.id !== docIdToDelete));
+    } catch (err: any) {
+      alert("Failed to delete document: " + err.message);
+    }
   };
 
   // Add this line right above return (...):

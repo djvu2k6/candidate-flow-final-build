@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/db";
 
-// 2. Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const geminiApiKey = process.env.GEMINI_API_KEY;
+if (!geminiApiKey) {
+  throw new Error("GEMINI_API_KEY environment variable is missing!");
+}
+
+const genAI = new GoogleGenerativeAI(geminiApiKey);
+
+// Helper function to pause briefly during retries
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,118 +21,142 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Convert file to base64 for Gemini
+    // 1. Convert File directly to Base64 (DO NOT convert to text string)
     const arrayBuffer = await file.arrayBuffer();
     const base64Data = Buffer.from(arrayBuffer).toString("base64");
 
-    // 3. DYNAMIC BRAIN UPGRADE: Fetch live Job Categories from your database
-    const jobData = await prisma.jobCategory.findMany({ select: { name: true } });
-
-    let jobListString = "Engineering, Healthcare, Construction"; // Fallback
-    if (jobData && jobData.length > 0) {
-      jobListString = jobData.map(j => j.name).join(", ");
+    // 2. Ensure MIME type is accurate
+    let mimeType = file.type;
+    if (!mimeType || mimeType === "application/octet-stream") {
+      mimeType = file.name.endsWith(".pdf") ? "application/pdf" : "image/jpeg";
     }
 
-    // 4. Connect to Gemini 1.5 Flash (Super fast, native PDF support)
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // 3. Fetch live Job Categories from database
+    let jobListString = "Engineering, Healthcare, Construction";
+    try {
+      const jobData = await prisma.jobCategory.findMany({ select: { name: true } });
+      if (jobData && jobData.length > 0) {
+        jobListString = jobData.map((j) => j.name).join(", ");
+      }
+    } catch (dbError) {
+      console.warn("[PARSE API] Job category lookup failed; using fallback list.");
+    }
 
-    // 5. The Master Prompt
+    // 4. Extraction Prompt
     const prompt = `
-You are a senior forensic document analyst and HR specialist for an international overseas recruitment agency. You are processing a multi-document PDF bundle submitted by a job candidate. This bundle may contain any combination of: bio-data sheets, CVs/resumes, passport bio-pages, visa pages, trade certificates, diplomas, experience letters, and medical reports.
+You are an expert HR document parser specializing in candidate recruitment files (Resumes, Passports, Aadhaar/ID cards, Trade Certificates).
 
-Your job is to extract structured candidate data with maximum accuracy. Treat every document type differently — each has its own extraction rules below.
+Analyze this document visual content directly and extract candidate details.
 
----
+RULES:
+- Read visual text, tables, and headers directly from the document.
+- Never output raw PDF syntax (%PDF, stream bytes, or code markers).
+- [PASSPORT]: Extract passportNumber, dob (YYYY-MM-DD), passportExpiry (YYYY-MM-DD), and nationality.
+- [EXPERIENCE]: Calculate experienceYears as an integer (default to 0 if not stated).
+- [JOB CATEGORY]: Map currentRole to the CLOSEST match from this list ONLY: [${jobListString}]. If none fit, use "Uncategorized".
+- Return ONLY a single valid JSON object. No markdown wrapping (no \`\`\`json).
 
-DOCUMENT-SPECIFIC EXTRACTION RULES:
-
-[PASSPORT]
-- Prioritize the Machine Readable Zone (MRZ) at the bottom of the bio-page for passportNumber, dob, and passportExpiry — MRZ is ground truth, always more reliable than handwritten fields.
-- MRZ format: Line 1 starts with 'P<', Line 2 contains passport number, DOB (YYMMDD), expiry (YYMMDD).
-- If MRZ is unreadable, fall back to the visual fields on the bio-page.
-- Extract nationality from the passport, not from the resume.
-- Flag if passport appears expired based on passportExpiry vs today.
-
-[RESUME / BIO-DATA]
-- Calculate experienceYears by summing all work history date ranges. If the candidate lists a total, cross-verify it against the actual history. Use the calculated value if there's a conflict.
-- Extract the most recent job title as a signal for currentRole mapping.
-- Do not infer skills — only extract what is explicitly stated or demonstrated through job descriptions.
-
-[TRADE CERTIFICATES / DIPLOMAS / LICENSES]
-- Extract the exact certificate name, issuing body, and year if present.
-- Add the trade/skill to the skills array.
-- Add the certificate itself (e.g., "CSWIP 3.1 Welding Certificate") to the documentsFound array.
-
-[EXPERIENCE LETTERS]
-- Use to verify or supplement work history dates if the resume is vague.
-- Extract employer names and durations if not already captured.
-
----
-
-JOB CATEGORIZATION:
-Map the candidate's primary profession to the CLOSEST match from this approved list ONLY: [${jobListString}]
-- Use their most recent role and dominant skill set to decide.
-- If multiple categories fit, choose the most specific one.
-- If no category fits even loosely, return exactly "Uncategorized". Never invent categories.
-
----
-
-OUTPUT RULES:
-- Return ONLY a single valid JSON object. No markdown, no code fences, no explanation text before or after.
-- All dates must be in YYYY-MM-DD format.
-- Empty string "" for any field not found. Never use null, N/A, or "not found".
-- experienceYears must be an integer. If less than 1 year, return 0.
-- skills array must be deduplicated — no repeated entries.
-- documentsFound must list every distinct document type detected, not just the ones that yielded data.
-
----
-
-RETURN THIS EXACT JSON STRUCTURE:
+REQUIRED JSON FORMAT:
 {
-  "fullName": "First and Last Name as it appears on passport (preferred) or resume",
+  "fullName": "",
   "email": "",
   "phone": "",
-  "address": "Home address, city, and country if found",
-  "nationality": "As stated on passport or resume",
+  "address": "",
+  "nationality": "",
   "dob": "YYYY-MM-DD",
-  "passportNumber": "Exact as in MRZ or bio-page",
+  "passportNumber": "",
   "passportExpiry": "YYYY-MM-DD",
-  "passportExpired": true or false,
-  "gender": "Male, Female, or Other",
+  "passportExpired": false,
+  "gender": "",
   "experienceYears": 0,
-  "education": "Highest qualification found",
-  "skills": ["deduplicated", "list", "of", "all", "skills", "and", "trades"],
-  "certificates": ["Exact certificate names with issuing body if found"],
-  "currentRole": "Must be from approved list or Uncategorized",
-  "summary": "2-3 sentences covering their trade specialization, total experience, overseas work history if any, and key verified certificates.",
-  "documentsFound": ["Every document type detected in this bundle"]
+  "education": "",
+  "skills": [],
+  "certificates": [],
+  "currentRole": "Uncategorized",
+  "summary": "Concise 2-sentence summary of candidate qualifications."
 }
 `;
 
-    // 6. Send to Gemini
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType: file.type, // Works seamlessly with application/pdf
+    // 5. Multi-Model Fallback List
+    const candidateModels = [
+      "gemini-3.5-flash",
+      "gemini-3.1-flash-lite",
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+    ];
+
+    let result: any = null;
+    let lastError: any = null;
+
+    // Iterate through available models
+    for (const modelName of candidateModels) {
+      // Retry up to 2 times per model on 503 traffic spikes
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          console.log(`[PARSE API] Trying model: ${modelName} (Attempt ${attempt})`);
+          const model = genAI.getGenerativeModel({
+            model: modelName,
+            generationConfig: { responseMimeType: "application/json" },
+          });
+
+          result = await model.generateContent([
+            prompt,
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType: mimeType,
+              },
+            },
+          ]);
+
+          if (result) break;
+        } catch (err: any) {
+          lastError = err;
+          const errMsg = err?.message || "";
+          console.warn(`[PARSE API] ${modelName} attempt ${attempt} failed: ${errMsg.substring(0, 100)}`);
+
+          // If hit by 503 high-demand spike, pause 1.2s before retrying/switching models
+          if (errMsg.includes("503") || errMsg.includes("Service Unavailable") || errMsg.includes("high demand")) {
+            await wait(1200);
+            continue;
+          }
+
+          // If rate limited or quota error, break attempt loop to try next model or throw
+          if (errMsg.includes("429") || errMsg.includes("quota")) {
+            break;
+          }
+        }
+      }
+
+      if (result) break; // Stop as soon as one model succeeds
+    }
+
+    if (!result) {
+      const is503 = lastError?.message?.includes("503") || lastError?.message?.includes("high demand");
+      const isQuota = lastError?.message?.includes("429") || lastError?.message?.includes("quota");
+
+      return NextResponse.json(
+        {
+          error: is503
+            ? "Gemini servers are experiencing a temporary high demand spike. Please try again in a moment."
+            : isQuota
+            ? "API quota limit hit. Please check your key usage."
+            : "Failed to process document with Gemini.",
+          details: lastError?.message || "All fallback models failed.",
         },
-      },
-    ]);
+        { status: is503 ? 503 : isQuota ? 429 : 500 }
+      );
+    }
 
     const responseText = result.response.text();
-
-    // Clean the JSON output just in case Gemini wraps it in ```json ... ```
-    const cleanedText = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-
-    const parsedJson = JSON.parse(cleanedText);
+    const parsedJson = JSON.parse(responseText);
 
     return NextResponse.json(parsedJson, { status: 200 });
 
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
+    console.error("Parse Route Error:", error);
     return NextResponse.json(
-      { error: "Failed to parse document", details: error.message },
+      { error: "Failed to parse document bundle", details: error.message },
       { status: 500 }
     );
   }

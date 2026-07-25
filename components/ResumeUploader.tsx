@@ -99,12 +99,33 @@ export default function ResumeUploader() {
       formData.append('file', fileToUpload);
 
       const response = await fetch('/api/parse', { method: 'POST', body: formData });
-      const result = await response.json();
+      const responseText = await response.text();
+      let result: any = null;
 
-      if (!response.ok) throw new Error(result.details || result.error);
+      try {
+        result = JSON.parse(responseText);
+      } catch {
+        const snippet = (responseText || "").slice(0, 200);
+        throw new Error(
+          snippet.includes("<!DOCTYPE") || snippet.includes("<html")
+            ? "The parsing service returned an unexpected HTML response. Please check the server configuration."
+            : `The parsing service returned invalid JSON: ${snippet}`
+        );
+      }
+
+      if (!response.ok) throw new Error(result.details || result.error || "Unknown parsing error");
+
+      // Sanitize AI / fallback results to avoid showing raw PDF headers or binary gibberish
+      const rawName = (result.fullName || "").toString();
+      const looksLikePdf = /%PDF|ReportLab|\x00/.test(rawName) || /%PDF|ReportLab/.test(result.summary || "");
+      const cleanedName = looksLikePdf ? "" : rawName.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+      const rawSummary = (result.summary || "").toString();
+      const cleanedSummary = looksLikePdf
+        ? `Raw PDF content detected; please verify the document. Snippet: ${(rawSummary || "").slice(0,200)}`
+        : rawSummary;
 
       setParsedData({
-        name: result.fullName || "",
+        name: cleanedName,
         email: result.email || "",
         phone: result.phone || "",
         address: result.address || "",
@@ -114,7 +135,7 @@ export default function ResumeUploader() {
         experienceYears: result.experienceYears || "",
         education: result.education || "",
         skills: result.skills || [],
-        additionalInfo: result.summary || "",
+        additionalInfo: cleanedSummary || "",
         passportExpiry: result.passportExpiry || "",
         gender: result.gender || "",
         documentsFound: result.documentsFound || []
@@ -122,9 +143,16 @@ export default function ResumeUploader() {
 
       setStatus("success");
     } catch (error: any) {
-      console.error("Upload failed:", error);
-      setStatus("error");
-    }
+        console.error("Error parsing resume:", error);
+        setStatus("idle"); 
+        
+        // Check if it's a 429 Quota Error
+        if (error.message?.includes("429") || error.message?.includes("quota")) {
+          alert("We are processing too many resumes right now. Please wait about a minute and try again.");
+        } else {
+          alert("Failed to extract data from resume: " + (error.message || "Unknown error"));
+        }
+      }
   };
 
   const validateForm = (dataToValidate: any) => {

@@ -1,15 +1,24 @@
 "use server";
 
 import { prisma } from "@/lib/db";
+import { auth } from "@/auth";
 
 export async function getDashboardData() {
-  const [candidates, pendingDocsCount, scheduledInterviewsCount, allInterviews, allPlacements, agents] = await Promise.all([
+  // Execute all dashboard queries concurrently to prevent connection pool starvation
+  const [
+    candidates,
+    pendingDocsCount,
+    scheduledInterviewsCount,
+    allInterviews,
+    allPlacements,
+    agents
+  ] = await Promise.all([
     prisma.candidate.findMany({ orderBy: { created_at: 'desc' } }),
     prisma.document.count({ where: { status: 'Pending' } }),
     prisma.interview.count({ where: { status: 'Scheduled' } }),
     prisma.interview.findMany({ select: { created_at: true } }),
     prisma.placement.findMany({ select: { created_at: true } }),
-    prisma.agent.findMany({ orderBy: { created_at: 'desc' }, take: 5 })
+    prisma.agent.findMany({ orderBy: { created_at: 'desc' }, take: 5 }),
   ]);
 
   return {
@@ -28,7 +37,7 @@ export async function getMapsData() {
     prisma.agent.findMany({ select: { id: true, name: true } }),
     prisma.user.findMany({ select: { id: true, email: true } })
   ]);
-  
+
   return { jobs, agents, staff };
 }
 
@@ -44,7 +53,7 @@ export async function getAgentsAndTeam() {
     prisma.agent.findMany({ orderBy: { created_at: 'desc' } }),
     prisma.user.findMany({ orderBy: { created_at: 'desc' } })
   ]);
-  
+
   return { agents, team };
 }
 
@@ -70,8 +79,6 @@ export async function deleteJobCategory(id: string) {
   return await prisma.jobCategory.delete({ where: { id } });
 }
 
-import { auth } from "@/auth";
-
 export async function getCurrentProfile() {
   const session = await auth();
   if (!session?.user?.id) return null;
@@ -88,16 +95,15 @@ export async function addCandidate(data: any) {
 }
 
 export async function getCandidateDetails(id: string) {
-  const candidate = await prisma.candidate.findUnique({
-    where: { id },
-    include: {
-      documents: { orderBy: { created_at: 'desc' } },
-      interviews: { orderBy: { interview_date: 'asc' } },
-      placements: true
-    }
-  });
-
-  const [agents, staff] = await Promise.all([
+  const [candidate, agents, staff] = await Promise.all([
+    prisma.candidate.findUnique({
+      where: { id },
+      include: {
+        documents: { orderBy: { created_at: 'desc' } },
+        interviews: { orderBy: { interview_date: 'asc' } },
+        placements: true
+      }
+    }),
     prisma.agent.findMany({ select: { id: true, name: true, phone: true } }),
     prisma.user.findMany({ select: { id: true, email: true } })
   ]);
@@ -175,7 +181,6 @@ export async function getCandidatesList() {
     })
   ]);
 
-  // Format candidates to match the expected structure
   const formattedCandidates = candidates.map(c => ({
     ...c,
     agents: c.agent ? { name: c.agent.name } : null
@@ -185,15 +190,67 @@ export async function getCandidatesList() {
 }
 
 export async function bulkDeleteCandidates(ids: string[]) {
-  // Delete related records first to avoid foreign key constraints
-  await prisma.document.deleteMany({ where: { candidate_id: { in: ids } } });
-  await prisma.interview.deleteMany({ where: { candidate_id: { in: ids } } });
-  await prisma.placement.deleteMany({ where: { candidate_id: { in: ids } } });
-  await prisma.candidateStatusLog.deleteMany({ where: { candidate_id: { in: ids } } });
-  
-  // Delete candidates
+  // Delete related records in parallel to prevent foreign key issues fast
+  await Promise.all([
+    prisma.document.deleteMany({ where: { candidate_id: { in: ids } } }),
+    prisma.interview.deleteMany({ where: { candidate_id: { in: ids } } }),
+    prisma.placement.deleteMany({ where: { candidate_id: { in: ids } } }),
+    prisma.candidateStatusLog.deleteMany({ where: { candidate_id: { in: ids } } })
+  ]);
+
   return await prisma.candidate.deleteMany({
     where: { id: { in: ids } }
+  });
+}
+
+export async function addDocument(candidateId: string, title: string, fileUrl: string) {
+  return await prisma.document.create({
+    data: {
+      candidate_id: candidateId,
+      title,
+      file_url: fileUrl,
+      status: "Verified"
+    }
+  });
+}
+
+export async function deleteDocument(documentId: string) {
+  return await prisma.document.delete({ where: { id: documentId } });
+}
+
+export async function seedJobCategories() {
+  const defaultCategories = [
+    "Construction Worker",
+    "Welder",
+    "Electrician",
+    "Plumber",
+    "Carpenter",
+    "Mason / Bricklayer",
+    "Heavy Equipment Operator",
+    "Scaffolder",
+    "Painter",
+    "Steel Fixer / Bar Bender",
+    "Forklift Operator",
+    "Rigger",
+    "Nurse",
+    "Caregiver",
+    "Driver (Heavy Vehicle)",
+    "Driver (Light Vehicle)",
+    "Security Guard",
+    "Housekeeping / Cleaning Staff",
+    "Cook / Kitchen Staff",
+    "Factory Worker",
+    "Tailor / Garment Worker",
+    "AC Technician / HVAC",
+    "Mechanical Technician",
+    "Civil Engineer",
+    "IT / Software Professional",
+  ];
+
+  // Batch insert all default categories in 1 query without throwing error on duplicates
+  return await prisma.jobCategory.createMany({
+    data: defaultCategories.map(name => ({ name })),
+    skipDuplicates: true,
   });
 }
 
