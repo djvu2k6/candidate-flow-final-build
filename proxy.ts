@@ -1,7 +1,8 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
-export default auth((req) => {
+// We changed 'export default' to 'export const proxy ='
+export const proxy = auth((req) => {
   const { nextUrl, auth: session } = req;
 
   const isLoggedIn = !!session;
@@ -23,6 +24,6 @@ export default auth((req) => {
 });
 
 export const config = {
-  // Apply middleware to all routes except Next.js internals and static files
+  // Apply proxy to all routes except Next.js internals and static files
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$|.*\\.svg$|.*\\.webp$).*)"],
 };
