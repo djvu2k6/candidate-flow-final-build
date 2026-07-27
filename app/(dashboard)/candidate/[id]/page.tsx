@@ -110,8 +110,8 @@ export default function CandidateProfilePage() {
       if (!res.ok) throw new Error(data.error || "Upload failed");
 
       // Step 2: Save the document record to the Prisma Document table
+      // Step 2: Save the document record to the Prisma Document table
       const newDoc = await addDocument(candidateId, file.name, data.url);
-
       // Step 3: Update local state so UI reflects immediately
       setDocuments((prev: any[]) => [...prev, newDoc]);
     } catch (err: any) {
@@ -159,7 +159,7 @@ export default function CandidateProfilePage() {
     if (!file || !candidate) return;
 
     setIsUploadingAvatar(true);
-    
+
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder", "avatars");

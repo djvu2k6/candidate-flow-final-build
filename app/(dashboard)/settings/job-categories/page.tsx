@@ -75,14 +75,17 @@ export default function JobCategoriesPage() {
         }
     };
 
+    // FIXED: Properly structured function using the Prisma .count logic
     const handleSeedDefaults = async () => {
         if (!confirm("This will add all standard immigration & overseas recruitment job categories that are missing from your list. Existing categories will NOT be duplicated. Proceed?")) return;
         setIsSeeding(true);
         setSeedResult(null);
         try {
-            const results = await seedJobCategories();
-            const created = results.filter((r: any) => r.status === "created").length;
-            const skipped = results.filter((r: any) => r.status === "already_exists").length;
+            const result = await seedJobCategories();
+            const created = result.count || 0;
+            const TOTAL_DEFAULTS = 25; // Update this if you add more to actions.ts
+            const skipped = TOTAL_DEFAULTS - created;
+
             setSeedResult({ created, skipped });
             fetchCategories();
         } catch (error: any) {
