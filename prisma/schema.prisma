@@ -158,14 +158,15 @@ model Document {
   id           String    @id @default(cuid())
   candidate_id String
   title        String
-  file_url     String?
+  file_url     String?   
+  file_data    Bytes?    // Stores the raw file buffer
+  mime_type    String?   // Stores the content type
   status       String    @default("Pending")
   expiry_date  DateTime? @db.Date
   created_at   DateTime  @default(now())
 
   candidate    Candidate @relation(fields: [candidate_id], references: [id], onDelete: Cascade)
 }
-
 model CandidateStatusLog {
   id              String   @id @default(cuid())
   candidate_id    String

@@ -8,8 +8,12 @@ const isProduction = process.env.NODE_ENV === "production";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
-  session: { 
+  session: {
     strategy: "jwt",
+    maxAge: 60 * 60,
+  },
+  jwt: {
+    maxAge: 60 * 60,
   },
   // Custom cookie configuration to enforce browser session lifetime
   cookies: {

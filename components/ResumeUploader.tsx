@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { UploadCloud, Loader2, CheckCircle2, AlertCircle, Edit3, Database, UserPlus, FileText, Shield, Plus, X, AlertTriangle, Search, ChevronDown, Check } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, Edit3, Database, UserPlus, Shield, Plus, X, AlertTriangle, Search, ChevronDown, Check } from "lucide-react";
 import { logAction } from "@/lib/audit";
 import { getMapsData, addJobCategory, addCandidate } from "@/app/actions";
 
@@ -20,8 +20,6 @@ const calculateAge = (dobString: string) => {
 };
 
 export default function ResumeUploader() {
-  const [mode, setMode] = useState<"ai" | "manual">("ai");
-  const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "extracting" | "parsing" | "success" | "error" | "saving" | "saved">("idle");
   const [parsedData, setParsedData] = useState<any>(null);
   const [validationErrors, setValidationErrors] = useState<any>({});
@@ -73,13 +71,6 @@ export default function ResumeUploader() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-      setStatus("idle");
-      setParsedData(null);
-    }
-  };
   const filteredJobCategories = useMemo(() => {
     if (!jobSearchQuery.trim()) return jobCategories;
     return jobCategories.filter(job =>
@@ -92,69 +83,6 @@ export default function ResumeUploader() {
   );
   const selectedJobName = selectedJobObj ? selectedJobObj.name : "-- Select Category --";
 
-  const processResume = async (fileToUpload: File) => {
-    try {
-      setStatus("parsing");
-      const formData = new FormData();
-      formData.append('file', fileToUpload);
-
-      const response = await fetch('/api/parse', { method: 'POST', body: formData });
-      const responseText = await response.text();
-      let result: any = null;
-
-      try {
-        result = JSON.parse(responseText);
-      } catch {
-        const snippet = (responseText || "").slice(0, 200);
-        throw new Error(
-          snippet.includes("<!DOCTYPE") || snippet.includes("<html")
-            ? "The parsing service returned an unexpected HTML response. Please check the server configuration."
-            : `The parsing service returned invalid JSON: ${snippet}`
-        );
-      }
-
-      if (!response.ok) throw new Error(result.details || result.error || "Unknown parsing error");
-
-      // Sanitize AI / fallback results to avoid showing raw PDF headers or binary gibberish
-      const rawName = (result.fullName || "").toString();
-      const looksLikePdf = /%PDF|ReportLab|\x00/.test(rawName) || /%PDF|ReportLab/.test(result.summary || "");
-      const cleanedName = looksLikePdf ? "" : rawName.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
-      const rawSummary = (result.summary || "").toString();
-      const cleanedSummary = looksLikePdf
-        ? `Raw PDF content detected; please verify the document. Snippet: ${(rawSummary || "").slice(0,200)}`
-        : rawSummary;
-
-      setParsedData({
-        name: cleanedName,
-        email: result.email || "",
-        phone: result.phone || "",
-        address: result.address || "",
-        passport: result.passportNumber || "",
-        dob: result.dob || "",
-        destination: "",
-        experienceYears: result.experienceYears || "",
-        education: result.education || "",
-        skills: result.skills || [],
-        additionalInfo: cleanedSummary || "",
-        passportExpiry: result.passportExpiry || "",
-        gender: result.gender || "",
-        documentsFound: result.documentsFound || []
-      });
-
-      setStatus("success");
-    } catch (error: any) {
-        console.error("Error parsing resume:", error);
-        setStatus("idle"); 
-        
-        // Check if it's a 429 Quota Error
-        if (error.message?.includes("429") || error.message?.includes("quota")) {
-          alert("We are processing too many resumes right now. Please wait about a minute and try again.");
-        } else {
-          alert("Failed to extract data from resume: " + (error.message || "Unknown error"));
-        }
-      }
-  };
-
   const validateForm = (dataToValidate: any) => {
     const errors: any = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -165,7 +93,7 @@ export default function ResumeUploader() {
     if (dataToValidate.phone && digitsOnly.length > 0 && digitsOnly.length < 10) {
       errors.phone = "Phone number must be at least 10 digits.";
     }
-    if (mode === "manual" && !selectedJobCategory) {
+    if (!selectedJobCategory) {
       errors.jobCategory = "Job Category is required.";
     }
     setValidationErrors(errors);
@@ -393,49 +321,16 @@ export default function ResumeUploader() {
   return (
     <div className="w-full max-w-3xl mx-auto p-6 sm:p-8 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-2xl shadow-xl max-h-[85vh] overflow-y-auto border border-slate-100 dark:border-slate-800 transition-colors duration-200">
 
-      <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mb-8 w-full max-w-[260px] mx-auto shadow-inner transition-colors duration-200">
-        <button onClick={() => setMode("ai")} className={`flex-1 text-xs font-bold py-2 rounded-lg transition-all cursor-pointer ${mode === "ai" ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}>
-          AI Intake
-        </button>
-        <button onClick={() => setMode("manual")} className={`flex-1 text-xs font-bold py-2 rounded-lg transition-all cursor-pointer ${mode === "manual" ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}>
-          Manual Entry
-        </button>
-      </div>
-
       <div className="text-center mb-8">
         <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
           Clockwise Candidate Intake
         </h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">
-          {mode === "ai" ? "Upload the bio-data bundle. AI will extract demographics & documents." : "Bypass AI and enter candidate details manually."}
+          Enter candidate details manually and prepare them for saving to the vault.
         </p>
       </div>
 
-      {mode === "ai" ? (
-        <>
-          <div className="relative border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-10 hover:bg-slate-50 dark:hover:bg-slate-850 hover:border-slate-400 dark:hover:border-slate-600 transition-all flex flex-col items-center justify-center cursor-pointer group">
-            <input type="file" accept="application/pdf,image/*" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-            <div className="p-4 bg-slate-900 dark:bg-blue-600 text-white rounded-full mb-4 group-hover:scale-110 transition-transform shadow-md">
-              <UploadCloud className="w-6 h-6" />
-            </div>
-            <p className="text-sm font-bold text-slate-900 dark:text-white">{file ? file.name : "Click or drag multi-page PDF here"}</p>
-          </div>
-
-          {(status === "idle" || status === "extracting" || status === "parsing" || status === "error") && (
-            <button
-              onClick={() => file && processResume(file)}
-              disabled={!file || status === "extracting" || status === "parsing"}
-              className="w-full mt-6 py-3 px-4 bg-slate-900 dark:bg-blue-600 hover:bg-black dark:hover:bg-blue-700 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-500 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-            >
-              {status === "idle" && "Extract Bio-Data & Docs"}
-              {status === "extracting" && <><Loader2 className="w-4 h-4 animate-spin" /> Reading Document...</>}
-              {status === "parsing" && <><Loader2 className="w-4 h-4 animate-spin" /> AI Processing Data...</>}
-              {status === "error" && <><AlertCircle className="w-4 h-4" /> Processing Failed</>}
-            </button>
-          )}
-        </>
-      ) : (
-        <form onSubmit={handleManualSubmit} className="space-y-5">
+      <form onSubmit={handleManualSubmit} className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Full Name *</label>
@@ -480,7 +375,6 @@ export default function ResumeUploader() {
             <Edit3 className="w-4 h-4" /> Verify & Prepare Data
           </button>
         </form>
-      )}
 
       {/* CONFIRMATION & ASSIGNMENT SECTION */}
       {(status === "success" || status === "saving" || status === "saved") && parsedData && (

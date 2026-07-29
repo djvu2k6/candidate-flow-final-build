@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Users, Search, Download, CheckSquare, Square, Loader2, Filter, AlertTriangle, Trash2 } from "lucide-react";
+import { Users, Download, CheckSquare, Square, Loader2, Filter, AlertTriangle, Trash2 } from "lucide-react";
 import { logAction } from "@/lib/audit";
 import { getCurrentProfile, getCandidatesList, bulkDeleteCandidates } from "@/app/actions";
+import { Search, ChevronDown, Check, X } from "lucide-react";
 
 // Helper function to calculate exact age dynamically
 const calculateAge = (dobString: string) => {
@@ -32,7 +33,17 @@ export default function CandidateSectionPage() {
     // Search & Filter States
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedJobFilter, setSelectedJobFilter] = useState("");
+    const [selectedStatusFilter, setSelectedStatusFilter] = useState("");
+    const [selectedAgentFilter, setSelectedAgentFilter] = useState("");
 
+    // State for the Job Category search input & dropdown toggle
+    const [jobSearchQuery, setJobSearchQuery] = useState("");
+    const [isJobDropdownOpen, setIsJobDropdownOpen] = useState(false);
+
+    // Filter job categories list based on user typing in the dropdown search
+    const filteredJobCategories = jobCategories.filter((cat) =>
+        cat.name.toLowerCase().includes(jobSearchQuery.toLowerCase())
+    );
     // Multi-Select State
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -59,14 +70,25 @@ export default function CandidateSectionPage() {
         fetchData();
     }, []);
 
+    const uniqueStatuses = Array.from(new Set(candidates.map(c => c.status).filter(Boolean))) as string[];
+    const uniqueAgents = Array.from(new Set(candidates.map(c => c.agents?.name).filter(Boolean))) as string[];
+
     // Filter logic
     const filteredCandidates = candidates.filter(c => {
-        const matchesSearch = c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            c.passport_number?.toLowerCase().includes(searchQuery.toLowerCase());
+        const search = searchQuery.toLowerCase();
+
+        // Main search (Name, Passport, Email, Phone)
+        const matchesSearch = !search ||
+            c.name?.toLowerCase().includes(search) ||
+            c.passport_number?.toLowerCase().includes(search) ||
+            c.email?.toLowerCase().includes(search) ||
+            c.phone?.toLowerCase().includes(search);
+
+        // Job Category Filter
         const matchesJob = selectedJobFilter === "" || c.current_role === selectedJobFilter;
+
         return matchesSearch && matchesJob;
     });
-
     const toggleSelectAll = () => {
         if (selectedIds.size === filteredCandidates.length) {
             setSelectedIds(new Set());
@@ -177,6 +199,8 @@ export default function CandidateSectionPage() {
 
                 {/* Toolbar */}
                 <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 flex flex-col sm:flex-row gap-4">
+
+                    {/* Main Search Input */}
                     <div className="relative flex-1 max-w-md">
                         <Search className="w-5 h-5 absolute left-3 top-2.5 text-slate-400" />
                         <input
@@ -184,22 +208,105 @@ export default function CandidateSectionPage() {
                             placeholder="Search names or passports..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-600 text-sm text-slate-900 dark:text-white"
+                            className="w-full pl-10 pr-10 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-600 text-sm text-slate-900 dark:text-white"
                         />
+                        {/* Quick Clear Button for Main Search */}
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery("")}
+                                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        )}
                     </div>
 
-                    <div className="relative w-full sm:w-64">
-                        <Filter className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-                        <select
-                            value={selectedJobFilter}
-                            onChange={(e) => setSelectedJobFilter(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-600 text-sm appearance-none text-slate-900 dark:text-white cursor-pointer"
-                        >
-                            <option value="">All Job Categories</option>
-                            {jobCategories.map(job => (
-                                <option key={job.id} value={job.name}>{job.name}</option>
-                            ))}
-                        </select>
+                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                        {/* Custom Searchable Job Category Dropdown */}
+                        <div className="relative w-full sm:w-72">
+                            {/* Dropdown Trigger Button */}
+                            <button
+                                type="button"
+                                onClick={() => setIsJobDropdownOpen(!isJobDropdownOpen)}
+                                className="w-full flex items-center justify-between pl-4 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors outline-none focus:border-blue-600"
+                            >
+                                <span className="flex items-center gap-2 truncate">
+                                    <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+                                    {selectedJobFilter || "All Job Categories"}
+                                </span>
+                                <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                            </button>
+
+                            {/* Dropdown Menu */}
+                            {isJobDropdownOpen && (
+                                <>
+                                    {/* Invisible backdrop to close dropdown when clicking outside */}
+                                    <div
+                                        className="fixed inset-0 z-10"
+                                        onClick={() => setIsJobDropdownOpen(false)}
+                                    />
+
+                                    <div className="absolute right-0 left-0 mt-2 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden p-2">
+                                        {/* Search bar inside the job dropdown */}
+                                        <div className="relative mb-2">
+                                            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input
+                                                type="text"
+                                                autoFocus
+                                                value={jobSearchQuery}
+                                                onChange={(e) => setJobSearchQuery(e.target.value)}
+                                                placeholder="Search categories..."
+                                                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
+                                            />
+                                        </div>
+
+                                        {/* Category List */}
+                                        <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/50">
+                                            {/* Option to clear job filter */}
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedJobFilter("");
+                                                    setIsJobDropdownOpen(false);
+                                                    setJobSearchQuery("");
+                                                }}
+                                                className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg font-bold transition-colors ${selectedJobFilter === ""
+                                                    ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400"
+                                                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                                    }`}
+                                            >
+                                                <span>All Job Categories</span>
+                                                {selectedJobFilter === "" && <Check className="w-3.5 h-3.5" />}
+                                            </button>
+
+                                            {/* Filtered Job Categories */}
+                                            {filteredJobCategories.length > 0 ? (
+                                                filteredJobCategories.map((cat) => (
+                                                    <button
+                                                        key={cat.id || cat.name}
+                                                        onClick={() => {
+                                                            setSelectedJobFilter(cat.name);
+                                                            setIsJobDropdownOpen(false);
+                                                            setJobSearchQuery("");
+                                                        }}
+                                                        className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg transition-colors ${selectedJobFilter === cat.name
+                                                            ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold"
+                                                            : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                                            }`}
+                                                    >
+                                                        <span className="truncate">{cat.name}</span>
+                                                        {selectedJobFilter === cat.name && <Check className="w-3.5 h-3.5" />}
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="p-3 text-center text-xs text-slate-400">
+                                                    No matching category
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
 

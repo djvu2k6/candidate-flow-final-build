@@ -94,32 +94,37 @@ export default function CandidateProfilePage() {
     setLoading(false);
   };
 
+  // Inside app/(dashboard)/candidate/[id]/page.tsx
+
   const handleInlineDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0]) return;
-    const file = e.target.files[0];
-    setIsUploadingDoc(true);
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     try {
-      // Step 1: Upload the file to the server
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("folder", "documents");
+      formData.append("candidate_id", candidateId); // 👈 1. Pass the candidate ID here!
+      formData.append("title", file.name);
 
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const res = await fetch("/api/upload", { // Update this path if your upload route is in a subfolder (e.g., /api/documents/upload)
+        method: "POST",
+        body: formData,
+      });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
 
-      // Step 2: Save the document record to the Prisma Document table
-      // Step 2: Save the document record to the Prisma Document table
-      const newDoc = await addDocument(candidateId, file.name, data.url);
-      // Step 3: Update local state so UI reflects immediately
-      setDocuments((prev: any[]) => [...prev, newDoc]);
-    } catch (err: any) {
-      alert("Upload failed: " + err.message);
-    } finally {
-      setIsUploadingDoc(false);
-      // Reset file input so same file can be re-uploaded if needed
+      // 👈 2. Use the new documentId to point to the database download route
+      const downloadUrl = `/api/documents/${data.documentId}/download`;
+
+      const newDoc = await addDocument(candidateId, file.name, downloadUrl);
+      setDocuments((prev: any[]) => [newDoc, ...prev]);
+
+      // Reset the input if needed
       e.target.value = "";
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      alert(error.message || "Failed to upload document");
     }
   };
   const handleAssignAgent = async (agentId: string) => {
