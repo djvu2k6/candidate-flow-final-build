@@ -99,7 +99,20 @@ export async function getCandidateDetails(id: string) {
     prisma.candidate.findUnique({
       where: { id },
       include: {
-        documents: { orderBy: { created_at: 'desc' } },
+        // Inside getCandidateDetails in actions.ts
+        documents: {
+          orderBy: { created_at: 'desc' },
+          select: {
+            id: true,
+            candidate_id: true,
+            title: true,
+            mime_type: true,
+            status: true,
+            file_url: true,
+            created_at: true,
+            // REMOVED updated_at: true because it doesn't exist in your schema!
+          }
+        },
         interviews: { orderBy: { interview_date: 'asc' } },
         placements: true
       }

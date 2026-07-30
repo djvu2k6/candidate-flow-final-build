@@ -125,10 +125,14 @@ export default function CandidateProfilePage() {
       const { candidate: candData, agents: agentsData, staff: staffData } =
         await getCandidateDetails(candidateId);
       if (candData) {
-        setCandidate(candData);
-        setDocuments(candData.documents || []);
-        setInterviews(candData.interviews || []);
-        setPlacement(candData.placements?.[0] || null);
+        setCandidate(candData as any);
+
+        // Use 'as any[]' to tell TypeScript we intentionally left out file_data
+        setDocuments((candData.documents as any[]) || []);
+
+        setInterviews((candData.interviews as any[]) || []);
+
+        setPlacement((candData.placements?.[0] as any) || null);
       }
       setAgents(agentsData);
       setStaff(staffData);
@@ -138,9 +142,7 @@ export default function CandidateProfilePage() {
     setLoading(false);
   };
 
-  const handleInlineDocUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleInlineDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -160,10 +162,15 @@ export default function CandidateProfilePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
 
-      const downloadUrl =
-        data.url || `/api/documents/${data.documentId}/download`;
+      // Use the newly created document data directly from the API response!
+      // No need to call the `addDocument` server action here anymore.
+      const newDoc = {
+        id: data.documentId,
+        title: data.name,
+        mime_type: data.type,
+        status: "Uploaded"
+      };
 
-      const newDoc = await addDocument(candidateId, file.name, downloadUrl);
       setDocuments((prev: any[]) => [newDoc, ...prev]);
 
       e.target.value = "";
@@ -455,8 +462,8 @@ export default function CandidateProfilePage() {
                 {age !== null && (
                   <span
                     className={`px-2 py-0.5 text-xs rounded-md font-bold flex items-center gap-1 ${isAgeWarning
-                        ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border border-red-300"
-                        : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                      ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border border-red-300"
+                      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
                       }`}
                   >
                     {isAgeWarning && <AlertTriangle className="w-3 h-3" />}
@@ -803,10 +810,10 @@ export default function CandidateProfilePage() {
                       </span>
                       <span
                         className={`inline-block px-1.5 py-0.5 text-[8px] font-extrabold rounded border mt-1 uppercase tracking-wider ${doc.status === "Verified"
-                            ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60"
-                            : doc.status === "Expired"
-                              ? "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 border-rose-200 dark:border-rose-800/60"
-                              : "bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 border-amber-200 dark:border-amber-800/60"
+                          ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60"
+                          : doc.status === "Expired"
+                            ? "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 border-rose-200 dark:border-rose-800/60"
+                            : "bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 border-amber-200 dark:border-amber-800/60"
                           }`}
                       >
                         {doc.status || "Uploaded"}
@@ -905,10 +912,10 @@ export default function CandidateProfilePage() {
                       </span>
                       <span
                         className={`px-2 py-0.5 text-[9px] font-extrabold rounded border ${int.status === "Passed"
-                            ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 border-emerald-100"
-                            : int.status === "Failed"
-                              ? "bg-rose-50 text-rose-600 dark:bg-rose-950/20 dark:text-rose-400 border-rose-100"
-                              : "bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400 border-blue-100"
+                          ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 border-emerald-100"
+                          : int.status === "Failed"
+                            ? "bg-rose-50 text-rose-600 dark:bg-rose-950/20 dark:text-rose-400 border-rose-100"
+                            : "bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400 border-blue-100"
                           }`}
                       >
                         {int.status}

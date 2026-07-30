@@ -128,7 +128,6 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
     if (hasMissingAgent || hasMissingStaff) {
       loadMaps();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidates]);
 
   const filteredList = useMemo(() => {
