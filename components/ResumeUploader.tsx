@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { Loader2, CheckCircle2, AlertCircle, Edit3, Database, UserPlus, Shield, Plus, X, AlertTriangle, Search, ChevronDown, Check } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, Edit3, Database, UserPlus, Shield, Plus, X, AlertTriangle, Search, ChevronDown, Check, UploadCloud, FileText } from "lucide-react";
 import { logAction } from "@/lib/audit";
 import { getMapsData, addJobCategory, addCandidate } from "@/app/actions";
+
 
 
 // Helper function to dynamically calculate age
@@ -43,6 +44,7 @@ export default function ResumeUploader() {
   const [isAddingNewJob, setIsAddingNewJob] = useState(false);
   const [newJobName, setNewJobName] = useState("");
   const [jobError, setJobError] = useState("");
+  const [cvFile, setCvFile] = useState<File | null>(null);
 
   const [manualData, setManualData] = useState({
     name: "", email: "", phone: "", address: "",
@@ -156,7 +158,8 @@ export default function ResumeUploader() {
     try {
       const selectedJob = jobCategories.find(j => j.id === selectedJobCategory);
 
-      await addCandidate({
+      // 1. Save the candidate first
+      const newCandidate = await addCandidate({
         name: parsedData.name,
         email: parsedData.email,
         phone: parsedData.phone,
@@ -178,10 +181,31 @@ export default function ResumeUploader() {
         assigned_agent_id: selectedAgentId || null,
         assigned_staff_id: selectedStaffId || null
       });
+
+      // THE FIX: Explicitly grab the id and cast it to a String
+      const candidateId = String(newCandidate.id);
+
+      // 2. If a CV file was selected, upload it to the Document Vault
+      if (cvFile && candidateId) {
+        const formData = new FormData();
+        formData.append("file", cvFile);
+        formData.append("candidate_id", candidateId);
+        formData.append("title", `${parsedData.name} - CV/Resume`);
+
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadRes.ok) {
+          console.error("Failed to upload CV, but candidate was saved.");
+        }
+      }
+
       await logAction("CANDIDATE_UPLOAD", `Uploaded candidate ${parsedData.name}`);
       setStatus("saved");
     } catch (error) {
-      console.error("Error saving to Supabase:", error);
+      console.error("Error saving to Supabase/Prisma:", error);
       setStatus("error");
     }
   };
@@ -283,8 +307,8 @@ export default function ResumeUploader() {
                           setIsJobDropdownOpen(false);
                         }}
                         className={`px-3 py-2.5 rounded-lg cursor-pointer transition-colors flex items-center justify-between truncate ${isSelected
-                            ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold"
-                            : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80"
+                          ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold"
+                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80"
                           }`}
                       >
                         <span className="truncate pr-2">{job.name}</span>
@@ -331,50 +355,50 @@ export default function ResumeUploader() {
       </div>
 
       <form onSubmit={handleManualSubmit} className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Full Name *</label>
-              <input type="text" required value={manualData.name} onChange={e => setManualData({ ...manualData, name: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
-            </div>
-            {renderJobCategorySelector()}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Date of Birth *</label>
-              <input type="date" required value={manualData.dob} onChange={e => setManualData({ ...manualData, dob: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Years of Experience *</label>
-              <input type="number" required value={manualData.experience} onChange={e => setManualData({ ...manualData, experience: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Passport Number *</label>
-              <input type="text" required value={manualData.passport} onChange={e => setManualData({ ...manualData, passport: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 uppercase text-slate-900 dark:text-white transition-all" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Target Destination</label>
-              <select value={manualData.destination} onChange={e => setManualData({ ...manualData, destination: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
-                <option value="">Select...</option>
-                <option value="Israel">Israel</option>
-                <option value="UAE">United Arab Emirates</option>
-                <option value="Saudi Arabia">Saudi Arabia</option>
-                <option value="Qatar">Qatar</option>
-                <option value="Oman">Oman</option>
-                <option value="UK">United Kingdom</option>
-                <option value="USA">United States</option>
-              </select>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Additional Skills</label>
-              <input type="text" value={manualData.skills} onChange={e => setManualData({ ...manualData, skills: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="e.g. TIG Welding, Heavy Equipment" />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Additional Notes</label>
-              <textarea rows={2} value={manualData.additionalInfo} onChange={e => setManualData({ ...manualData, additionalInfo: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="Add specific remarks, skills, or observations..." />
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Full Name *</label>
+            <input type="text" required value={manualData.name} onChange={e => setManualData({ ...manualData, name: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
           </div>
-          <button type="submit" className="w-full mt-2 py-3 px-4 bg-slate-900 dark:bg-blue-600 hover:bg-black text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm">
-            <Edit3 className="w-4 h-4" /> Verify & Prepare Data
-          </button>
-        </form>
+          {renderJobCategorySelector()}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Date of Birth *</label>
+            <input type="date" required value={manualData.dob} onChange={e => setManualData({ ...manualData, dob: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Years of Experience *</label>
+            <input type="number" required value={manualData.experience} onChange={e => setManualData({ ...manualData, experience: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Passport Number *</label>
+            <input type="text" required value={manualData.passport} onChange={e => setManualData({ ...manualData, passport: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 uppercase text-slate-900 dark:text-white transition-all" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Target Destination</label>
+            <select value={manualData.destination} onChange={e => setManualData({ ...manualData, destination: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
+              <option value="">Select...</option>
+              <option value="Israel">Israel</option>
+              <option value="UAE">United Arab Emirates</option>
+              <option value="Saudi Arabia">Saudi Arabia</option>
+              <option value="Qatar">Qatar</option>
+              <option value="Oman">Oman</option>
+              <option value="UK">United Kingdom</option>
+              <option value="USA">United States</option>
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Additional Skills</label>
+            <input type="text" value={manualData.skills} onChange={e => setManualData({ ...manualData, skills: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="e.g. TIG Welding, Heavy Equipment" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Additional Notes</label>
+            <textarea rows={2} value={manualData.additionalInfo} onChange={e => setManualData({ ...manualData, additionalInfo: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="Add specific remarks, skills, or observations..." />
+          </div>
+        </div>
+        <button type="submit" className="w-full mt-2 py-3 px-4 bg-slate-900 dark:bg-blue-600 hover:bg-black text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm">
+          <Edit3 className="w-4 h-4" /> Verify & Prepare Data
+        </button>
+      </form>
 
       {/* CONFIRMATION & ASSIGNMENT SECTION */}
       {(status === "success" || status === "saving" || status === "saved") && parsedData && (
@@ -432,11 +456,67 @@ export default function ResumeUploader() {
               </div>
             </div>
 
-            <div className="mt-4">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Additional Notes / AI Summary</label>
-              <textarea rows={3} value={parsedData.additionalInfo} onChange={e => setParsedData({ ...parsedData, additionalInfo: e.target.value })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800" placeholder="Extracted AI summary or staff notes..." />
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Additional Notes</label>
+              <textarea rows={2} value={manualData.additionalInfo} onChange={e => setManualData({ ...manualData, additionalInfo: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="Add specific remarks, skills, or observations..." />
+            </div>
+
+            {/* NEW: CV/Resume File Uploader UI */}
+            <div className="sm:col-span-2 mt-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                Upload CV / Resume (Optional)
+              </label>
+
+              {!cvFile ? (
+                <div className="relative group">
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setCvFile(e.target.files[0]);
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    title="Click to upload CV"
+                  />
+                  <div className="w-full p-6 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900/50 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-all flex flex-col items-center justify-center text-center">
+                    <div className="w-10 h-10 bg-white dark:bg-slate-800 shadow-sm rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                      <UploadCloud className="w-5 h-5 text-blue-500" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Click or drag file to upload</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">PDF, DOCX, JPG, PNG (Max 5MB)</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 flex items-center justify-between">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg shrink-0">
+                      <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="truncate">
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{cvFile.name}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        {(cvFile.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCvFile(null)}
+                    className="p-2 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-slate-400 hover:text-rose-500 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 transition-colors shrink-0"
+                    title="Remove file"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
+
+          <button type="submit" className="w-full mt-2 py-3 px-4 bg-slate-900 dark:bg-blue-600 hover:bg-black text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm">
+            <Edit3 className="w-4 h-4" /> Verify & Prepare Data
+          </button>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm flex items-end">

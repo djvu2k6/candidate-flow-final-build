@@ -2,18 +2,46 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getCurrentProfile, getCandidateDetails, updateCandidate, deleteCandidate, addDocument, deleteDocument } from "@/app/actions";
-import { ArrowLeft, User, Briefcase, UploadCloud, FileText, MapPin, Edit, Download, ShieldCheck, Camera, Loader2, Mail, Phone, Calendar, Fingerprint, ShieldAlert, Users, StickyNote, Trash2, Home, AlertTriangle, UserPlus, Shield } from "lucide-react";
+import {
+  getCurrentProfile,
+  getCandidateDetails,
+  updateCandidate,
+  deleteCandidate,
+  addDocument,
+  deleteDocument,
+} from "@/app/actions";
+import {
+  User,
+  Briefcase,
+  UploadCloud,
+  FileText,
+  MapPin,
+  Edit,
+  Download,
+  ShieldCheck,
+  Camera,
+  Loader2,
+  Mail,
+  Phone,
+  Calendar,
+  Fingerprint,
+  ShieldAlert,
+  Users,
+  StickyNote,
+  Trash2,
+  Home,
+  AlertTriangle,
+  UserPlus,
+  Shield,
+  Eye,
+} from "lucide-react";
 import CandidateEditor from "@/components/CandidateEditor";
 import CandidateStatusLog from "@/components/CandidateStatusLog";
 import { logAction } from "@/lib/audit";
 import InterviewScheduler from "@/components/InterviewScheduler";
 import PlacementLogger from "@/components/PlacementLogger";
 
-
-
 // Helper function to calculate exact age dynamically
-
 const calculateAge = (dobString: string) => {
   if (!dobString) return null;
   const birthDate = new Date(dobString);
@@ -27,18 +55,35 @@ const calculateAge = (dobString: string) => {
 };
 
 const getPassportStatus = (expiryDateStr?: string) => {
-  if (!expiryDateStr) return { label: "No Date Recorded", color: "text-slate-500 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700" };
+  if (!expiryDateStr)
+    return {
+      label: "No Date Recorded",
+      color:
+        "text-slate-500 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700",
+    };
   const expiryDate = new Date(expiryDateStr);
   const now = new Date();
   if (expiryDate < now) {
-    return { label: "Expired", color: "text-rose-600 bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50" };
+    return {
+      label: "Expired",
+      color:
+        "text-rose-600 bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50",
+    };
   }
   const sixMonthsFromNow = new Date();
   sixMonthsFromNow.setMonth(now.getMonth() + 6);
   if (expiryDate < sixMonthsFromNow) {
-    return { label: "Expiring Soon", color: "text-amber-600 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50" };
+    return {
+      label: "Expiring Soon",
+      color:
+        "text-amber-600 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50",
+    };
   }
-  return { label: "Active & Valid", color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-850" };
+  return {
+    label: "Active & Valid",
+    color:
+      "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800",
+  };
 };
 
 export default function CandidateProfilePage() {
@@ -56,8 +101,6 @@ export default function CandidateProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-
-  // NEW: Store current user's role to lock down the Delete button
   const [currentUserRole, setCurrentUserRole] = useState<string>("staff");
 
   // Dialog states
@@ -65,6 +108,7 @@ export default function CandidateProfilePage() {
   const [selectedInterview, setSelectedInterview] = useState<any>(null);
   const [isPlacementOpen, setIsPlacementOpen] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+
   useEffect(() => {
     fetchEverything();
   }, [candidateId]);
@@ -72,41 +116,43 @@ export default function CandidateProfilePage() {
   const fetchEverything = async () => {
     setLoading(true);
 
-    // 1. Fetch current user role for permissions
     const profileData = await getCurrentProfile();
     if (profileData) {
       setCurrentUserRole(profileData.role?.toLowerCase() || "staff");
     }
 
     try {
-      const { candidate: candData, agents: agentsData, staff: staffData } = await getCandidateDetails(candidateId);
+      const { candidate: candData, agents: agentsData, staff: staffData } =
+        await getCandidateDetails(candidateId);
       if (candData) {
         setCandidate(candData);
         setDocuments(candData.documents || []);
         setInterviews(candData.interviews || []);
-        setPlacement(candData.placements?.[0] || null); // Assuming 1 placement for now
+        setPlacement(candData.placements?.[0] || null);
       }
       setAgents(agentsData);
       setStaff(staffData);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching candidate details:", err);
     }
     setLoading(false);
   };
 
-  // Inside app/(dashboard)/candidate/[id]/page.tsx
-
-  const handleInlineDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInlineDocUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setIsUploadingDoc(true);
 
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("candidate_id", candidateId); // 👈 1. Pass the candidate ID here!
+      formData.append("candidate_id", candidateId);
       formData.append("title", file.name);
 
-      const res = await fetch("/api/upload", { // Update this path if your upload route is in a subfolder (e.g., /api/documents/upload)
+      const res = await fetch("/api/upload", {
         method: "POST",
         body: formData,
       });
@@ -114,19 +160,21 @@ export default function CandidateProfilePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
 
-      // 👈 2. Use the new documentId to point to the database download route
-      const downloadUrl = `/api/documents/${data.documentId}/download`;
+      const downloadUrl =
+        data.url || `/api/documents/${data.documentId}/download`;
 
       const newDoc = await addDocument(candidateId, file.name, downloadUrl);
       setDocuments((prev: any[]) => [newDoc, ...prev]);
 
-      // Reset the input if needed
       e.target.value = "";
     } catch (error: any) {
       console.error("Upload error:", error);
       alert(error.message || "Failed to upload document");
+    } finally {
+      setIsUploadingDoc(false);
     }
   };
+
   const handleAssignAgent = async (agentId: string) => {
     const dbAgentId = agentId === "" ? null : agentId;
     try {
@@ -135,8 +183,12 @@ export default function CandidateProfilePage() {
       alert(`Database Error: ${error.message}`);
       return;
     }
-    const agent = agents.find(a => a.id === agentId);
-    await logAction("CANDIDATE_EDIT", `Assigned candidate ${candidate.name} to agent ${agent?.name || 'Unassigned'}`);
+    const agent = agents.find((a) => a.id === agentId);
+    await logAction(
+      "CANDIDATE_EDIT",
+      `Assigned candidate ${candidate.name} to agent ${agent?.name || "Unassigned"
+      }`
+    );
     fetchEverything();
   };
 
@@ -148,18 +200,27 @@ export default function CandidateProfilePage() {
       alert(`Database Error: ${error.message}`);
       return;
     }
-    const member = staff.find(s => s.id === staffId);
-    await logAction("CANDIDATE_EDIT", `Assigned candidate ${candidate.name} to staff ${member?.email || 'Unassigned'}`);
+    const member = staff.find((s) => s.id === staffId);
+    await logAction(
+      "CANDIDATE_EDIT",
+      `Assigned candidate ${candidate.name} to staff ${member?.email || "Unassigned"
+      }`
+    );
     fetchEverything();
   };
 
   const handleStatusChange = async (newStatus: string) => {
     await updateCandidate(candidateId, { status: newStatus });
-    await logAction("CANDIDATE_EDIT", `Updated placement status of candidate ${candidate.name} to '${newStatus}'`);
+    await logAction(
+      "CANDIDATE_EDIT",
+      `Updated placement status of candidate ${candidate.name} to '${newStatus}'`
+    );
     fetchEverything();
   };
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = e.target.files?.[0];
     if (!file || !candidate) return;
 
@@ -181,17 +242,25 @@ export default function CandidateProfilePage() {
       fetchEverything();
     } catch (error) {
       console.error("Avatar upload failed:", error);
+    } finally {
+      setIsUploadingAvatar(false);
     }
-
-    setIsUploadingAvatar(false);
   };
 
   const handleDeleteCandidate = async () => {
-    if (!confirm(`Are you sure you want to permanently delete ${candidate.name}? This cannot be undone.`)) return;
+    if (
+      !confirm(
+        `Are you sure you want to permanently delete ${candidate.name}? This cannot be undone.`
+      )
+    )
+      return;
 
     try {
       await deleteCandidate(candidateId);
-      await logAction("CANDIDATE_DELETE", `Deleted candidate ${candidate.name} (ID: ${candidateId})`);
+      await logAction(
+        "CANDIDATE_DELETE",
+        `Deleted candidate ${candidate.name} (ID: ${candidateId})`
+      );
       router.push("/candidate-section");
     } catch (error) {
       alert("Error deleting candidate.");
@@ -200,46 +269,36 @@ export default function CandidateProfilePage() {
 
   const handleGeneratePDF = async () => {
     window.print();
-    await logAction("PDF_DOWNLOAD", `Printed/Generated PDF Bio-Data for candidate ${candidate.name}`);
-  };
-
-  if (loading) return <div className="p-8 text-slate-500 flex items-center gap-2"><Loader2 className="w-5 h-5 animate-spin" /> Loading Profile...</div>;
-  if (!candidate) return <div className="p-8 text-red-500">Candidate not found.</div>;
-
-  // BRANDING LOGIC & AGE CALCULATION
-  const displayId = `#CCC-${candidate.id.toString().slice(0, 6).toUpperCase()}`;
-  const age = candidate.dob ? calculateAge(candidate.dob) : null;
-  const isAgeWarning = age !== null && (age < 25 || age > 44);
-
-  // 3. Upgraded View / Download Handler (Preserves your actual .pdf, .png, .docx files!)
-  const handleViewOrDownload = (doc: any) => {
-    // Check if there is a valid file link (works for Supabase cloud URLs AND local 'blob:' upload URLs!)
-    if (doc.file_url) {
-      const a = document.createElement('a');
-      a.href = doc.file_url;
-      a.target = "_blank"; // This allows browser-supported files (like PDFs & Images) to preview in a new tab!
-      a.download = doc.title || "document"; // This locks in the EXACT original filename and extension!
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } else {
-      // Clean fallback alert if an old database record is missing its physical file link
-      alert(`No physical file attached for "${doc.title}". Please remove this entry using the trash icon and re-upload the document.`);
-    }
+    await logAction(
+      "PDF_DOWNLOAD",
+      `Printed/Generated PDF Bio-Data for candidate ${candidate.name}`
+    );
   };
 
   const handleDeleteDoc = async (docIdToDelete: string) => {
-    if (!canEdit) return;
+    if (!confirm("Are you sure you want to delete this document?")) return;
     try {
       await deleteDocument(docIdToDelete);
-      setDocuments((prev: any[]) => prev.filter((d: any) => d.id !== docIdToDelete));
+      setDocuments((prev: any[]) =>
+        prev.filter((d: any) => d.id !== docIdToDelete)
+      );
     } catch (err: any) {
       alert("Failed to delete document: " + err.message);
     }
   };
 
-  // Add this line right above return (...):
-  // const canEdit = currentUser?.role === "admin" || currentUser?.permissions?.can_edit_candidates || true;
+  if (loading)
+    return (
+      <div className="p-8 text-slate-500 flex items-center gap-2">
+        <Loader2 className="w-5 h-5 animate-spin" /> Loading Profile...
+      </div>
+    );
+  if (!candidate)
+    return <div className="p-8 text-red-500">Candidate not found.</div>;
+
+  const displayId = `#CCC-${candidate.id.toString().slice(0, 6).toUpperCase()}`;
+  const age = candidate.dob ? calculateAge(candidate.dob) : null;
+  const isAgeWarning = age !== null && (age < 25 || age > 44);
   const canEdit = true;
 
   return (
@@ -249,16 +308,30 @@ export default function CandidateProfilePage() {
           <div className="flex items-center gap-5">
             <div className="relative group cursor-pointer">
               <label className="cursor-pointer block relative">
-                <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} disabled={isUploadingAvatar} />
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  disabled={isUploadingAvatar}
+                />
                 {candidate.avatar_url ? (
-                  <img src={candidate.avatar_url} alt={candidate.name} className="w-16 h-16 rounded-full object-cover border-2 border-slate-200 dark:border-slate-800" />
+                  <img
+                    src={candidate.avatar_url}
+                    alt={candidate.name}
+                    className="w-16 h-16 rounded-full object-cover border-2 border-slate-200 dark:border-slate-800"
+                  />
                 ) : (
                   <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center text-2xl font-bold border-2 border-transparent">
                     {candidate.name.charAt(0)}
                   </div>
                 )}
                 <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  {isUploadingAvatar ? <Loader2 className="w-4 h-4 text-white animate-spin" /> : <Camera className="w-5 h-5 text-white" />}
+                  {isUploadingAvatar ? (
+                    <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  ) : (
+                    <Camera className="w-5 h-5 text-white" />
+                  )}
                 </div>
               </label>
             </div>
@@ -271,23 +344,38 @@ export default function CandidateProfilePage() {
                 </span>
               </h1>
               <p className="text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-4">
-                <span className="flex items-center gap-1"><Briefcase className="w-4 h-4" /> {candidate.current_role}</span>
-                <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> {candidate.destination_country || candidate.country || "Unspecified"}</span>
+                <span className="flex items-center gap-1">
+                  <Briefcase className="w-4 h-4" /> {candidate.current_role}
+                </span>
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-4 h-4" />{" "}
+                  {candidate.destination_country ||
+                    candidate.country ||
+                    "Unspecified"}
+                </span>
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm">
+            <button
+              onClick={() => setIsEditing(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm"
+            >
               <Edit className="w-4 h-4" /> Edit Profile
             </button>
-            <button onClick={handleGeneratePDF} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all shadow-sm shadow-blue-600/20">
+            <button
+              onClick={handleGeneratePDF}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all shadow-sm shadow-blue-600/20"
+            >
               <Download className="w-4 h-4" /> Generate PDF
             </button>
 
-            {/* ONLY ADMINS CAN SEE THE DELETE BUTTON */}
-            {currentUserRole === 'admin' && (
-              <button onClick={handleDeleteCandidate} className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-xl font-semibold hover:bg-rose-700 transition-all shadow-sm shadow-rose-600/20">
+            {currentUserRole === "admin" && (
+              <button
+                onClick={handleDeleteCandidate}
+                className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-xl font-semibold hover:bg-rose-700 transition-all shadow-sm shadow-rose-600/20"
+              >
                 <Trash2 className="w-4 h-4" /> Delete
               </button>
             )}
@@ -296,50 +384,81 @@ export default function CandidateProfilePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 print:grid-cols-1 print:gap-4 print:w-full">
-
         {/* Core Profile Details */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm h-fit print:border-none print:shadow-none print:p-0 print:block">
-
           <div className="hidden print:flex print:items-center print:gap-4 print:mb-8 print:border-b print:pb-6 print:border-slate-200">
             {candidate.avatar_url && (
-              <img src={candidate.avatar_url} alt="Profile" className="w-24 h-24 rounded-full object-cover" />
+              <img
+                src={candidate.avatar_url}
+                alt="Profile"
+                className="w-24 h-24 rounded-full object-cover"
+              />
             )}
             <div>
-              <h1 className="text-4xl font-black text-black">{candidate.name} <span className="text-xl text-slate-500 font-mono ml-2">({displayId})</span></h1>
+              <h1 className="text-4xl font-black text-black">
+                {candidate.name}{" "}
+                <span className="text-xl text-slate-500 font-mono ml-2">
+                  ({displayId})
+                </span>
+              </h1>
               <p className="text-lg text-slate-600">{candidate.current_role}</p>
-              <p className="text-sm text-slate-400 mt-1">{candidate.email} | {candidate.phone}</p>
+              <p className="text-sm text-slate-400 mt-1">
+                {candidate.email} | {candidate.phone}
+              </p>
             </div>
           </div>
 
           <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2 print:text-black">
-            <User className="w-5 h-5 text-blue-600 print:text-black" /> Candidate Details
+            <User className="w-5 h-5 text-blue-600 print:text-black" /> Candidate
+            Details
           </h2>
 
           <div className="space-y-5 print:space-y-6">
             <div>
-              <p className="text-xs font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Email</p>
-              <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm truncate">{candidate.email || "No Email Provided"}</p>
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5" /> Email
+              </p>
+              <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm truncate">
+                {candidate.email || "No Email Provided"}
+              </p>
             </div>
             <div>
-              <p className="text-xs font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Phone Number</p>
-              <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{candidate.phone || "No Phone Provided"}</p>
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5" /> Phone Number
+              </p>
+              <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
+                {candidate.phone || "No Phone Provided"}
+              </p>
             </div>
 
-            {/* REMOVED NATIONALITY, ADDED ADDRESS */}
             <div>
-              <p className="text-xs font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Home className="w-3.5 h-3.5" /> Address</p>
-              <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-relaxed">{candidate.address || "Not Recorded"}</p>
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <Home className="w-3.5 h-3.5" /> Address
+              </p>
+              <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-relaxed">
+                {candidate.address || "Not Recorded"}
+              </p>
             </div>
 
-            {/* AGE CALCULATION DISPLAY */}
             <div>
-              <p className="text-xs font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Date of Birth</p>
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5" /> Date of Birth
+              </p>
               <div className="flex items-center gap-3 mt-1">
                 <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
-                  {candidate.dob ? new Date(candidate.dob).toLocaleDateString(undefined, { dateStyle: 'long' }) : "No DOB Provided"}
+                  {candidate.dob
+                    ? new Date(candidate.dob).toLocaleDateString(undefined, {
+                      dateStyle: "long",
+                    })
+                    : "No DOB Provided"}
                 </p>
                 {age !== null && (
-                  <span className={`px-2 py-0.5 text-xs rounded-md font-bold flex items-center gap-1 ${isAgeWarning ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border border-red-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
+                  <span
+                    className={`px-2 py-0.5 text-xs rounded-md font-bold flex items-center gap-1 ${isAgeWarning
+                        ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border border-red-300"
+                        : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                      }`}
+                  >
                     {isAgeWarning && <AlertTriangle className="w-3 h-3" />}
                     {age} yrs
                   </span>
@@ -349,23 +468,43 @@ export default function CandidateProfilePage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-xs font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Gender</p>
-                <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{candidate.gender || "Not Recorded"}</p>
+                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5" /> Gender
+                </p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
+                  {candidate.gender || "Not Recorded"}
+                </p>
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> Experience</p>
-                <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{candidate.experience_years} Years</p>
+                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5" /> Experience
+                </p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
+                  {candidate.experience_years} Years
+                </p>
               </div>
             </div>
 
             <div>
-              <p className="text-xs font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-2">Verified Skills</p>
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+                Verified Skills
+              </p>
               <div className="flex flex-wrap gap-1.5">
-                {Array.isArray(candidate.skills) && candidate.skills.length > 0 ? candidate.skills.map((skill: string) => (
-                  <span key={skill} className="px-2.5 py-1 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 print:text-black print:border-slate-350 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-800">
-                    {skill}
+                {Array.isArray(candidate.skills) &&
+                  candidate.skills.length > 0 ? (
+                  candidate.skills.map((skill: string) => (
+                    <span
+                      key={skill}
+                      className="px-2.5 py-1 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 print:text-black text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-800"
+                    >
+                      {skill}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-400 font-medium italic">
+                    No skills listed
                   </span>
-                )) : <span className="text-xs text-slate-400 font-medium italic">No skills listed</span>}
+                )}
               </div>
             </div>
           </div>
@@ -377,18 +516,27 @@ export default function CandidateProfilePage() {
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
 
             <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2 print:text-black">
-              <Fingerprint className="w-5 h-5 text-blue-600 print:text-black" /> Passport Verification
+              <Fingerprint className="w-5 h-5 text-blue-600 print:text-black" />{" "}
+              Passport Verification
             </h2>
 
             <div className="space-y-6">
-              <div className="p-4 bg-white dark:bg-slate-955 border border-slate-100 dark:border-slate-900 rounded-xl shadow-inner">
-                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">Passport Status</p>
+              <div className="p-4 bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-900 rounded-xl shadow-inner">
+                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  Passport Status
+                </p>
                 {(() => {
-                  const expiryVal = candidate.additional_info?.passport_expiry || candidate.passport_expiry;
+                  const expiryVal =
+                    candidate.additional_info?.passport_expiry ||
+                    candidate.passport_expiry;
                   const status = getPassportStatus(expiryVal);
                   return (
-                    <div className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg border ${status.color} mt-1`}>
-                      {status.label === "Expired" && <ShieldAlert className="w-3.5 h-3.5" />}
+                    <div
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg border ${status.color} mt-1`}
+                    >
+                      {status.label === "Expired" && (
+                        <ShieldAlert className="w-3.5 h-3.5" />
+                      )}
                       {status.label}
                     </div>
                   );
@@ -396,18 +544,30 @@ export default function CandidateProfilePage() {
               </div>
 
               <div>
-                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Passport Number</p>
+                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                  Passport Number
+                </p>
                 <p className="font-mono text-xl font-bold tracking-widest text-slate-900 dark:text-white mt-1 uppercase">
                   {candidate.passport_number || "NOT RECORDED"}
                 </p>
               </div>
 
               <div>
-                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Passport Expiry Date</p>
-                <p className="text-base font-semibold text-slate-850 dark:text-slate-100 mt-1">
+                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                  Passport Expiry Date
+                </p>
+                <p className="text-base font-semibold text-slate-800 dark:text-slate-100 mt-1">
                   {(() => {
-                    const expiryVal = candidate.additional_info?.passport_expiry || candidate.passport_expiry;
-                    return expiryVal ? new Date(expiryVal).toLocaleDateString(undefined, { dateStyle: 'long' }) : <span className="text-slate-400 italic">Not Recorded</span>;
+                    const expiryVal =
+                      candidate.additional_info?.passport_expiry ||
+                      candidate.passport_expiry;
+                    return expiryVal ? (
+                      new Date(expiryVal).toLocaleDateString(undefined, {
+                        dateStyle: "long",
+                      })
+                    ) : (
+                      <span className="text-slate-400 italic">Not Recorded</span>
+                    );
                   })()}
                 </p>
               </div>
@@ -419,48 +579,79 @@ export default function CandidateProfilePage() {
               <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
                 <StickyNote className="w-5 h-5 text-amber-600" /> Staff Notes
               </h2>
-              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">{candidate.notes}</p>
+              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+                {candidate.notes}
+              </p>
             </div>
           )}
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm h-fit">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-              <Briefcase className="w-5 h-5 text-emerald-650" /> Placement Details
+              <Briefcase className="w-5 h-5 text-emerald-600" /> Placement Details
             </h2>
             {placement ? (
               <div className="space-y-4">
                 <div>
-                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Employer</p>
-                  <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{placement.employer_name}</p>
+                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                    Employer
+                  </p>
+                  <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
+                    {placement.employer_name}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Job Title</p>
-                  <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{placement.job_title}</p>
+                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                    Job Title
+                  </p>
+                  <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
+                    {placement.job_title}
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Country</p>
-                    <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{placement.destination_country}</p>
+                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                      Country
+                    </p>
+                    <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
+                      {placement.destination_country}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Duration</p>
-                    <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{placement.contract_duration_months} Months</p>
+                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                      Duration
+                    </p>
+                    <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
+                      {placement.contract_duration_months} Months
+                    </p>
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Start Date</p>
+                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                    Start Date
+                  </p>
                   <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
-                    {new Date(placement.start_date).toLocaleDateString(undefined, { dateStyle: 'long' })}
+                    {new Date(placement.start_date).toLocaleDateString(
+                      undefined,
+                      { dateStyle: "long" }
+                    )}
                   </p>
                 </div>
-                <button onClick={() => setIsPlacementOpen(true)} className="w-full mt-2 py-2 text-xs font-bold text-slate-650 dark:text-slate-350 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors">
+                <button
+                  onClick={() => setIsPlacementOpen(true)}
+                  className="w-full mt-2 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer"
+                >
                   Edit Placement Logs
                 </button>
               </div>
             ) : (
               <div className="text-center py-6 space-y-3">
-                <p className="text-xs text-slate-505 dark:text-slate-400 italic">No job placement logged yet.</p>
-                <button onClick={() => setIsPlacementOpen(true)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-705 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-emerald-500/20">
+                <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+                  No job placement logged yet.
+                </p>
+                <button
+                  onClick={() => setIsPlacementOpen(true)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-emerald-500/20 cursor-pointer"
+                >
                   Log Placement
                 </button>
               </div>
@@ -472,10 +663,10 @@ export default function CandidateProfilePage() {
         <div className="space-y-8 print:hidden">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm h-fit">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-emerald-600" /> Pipeline & Assignment
+              <ShieldCheck className="w-5 h-5 text-emerald-600" /> Pipeline &
+              Assignment
             </h2>
             <div className="space-y-6">
-
               {/* AGENT ASSIGNMENT */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -484,17 +675,22 @@ export default function CandidateProfilePage() {
                 <select
                   value={candidate.assigned_agent_id || ""}
                   onChange={(e) => handleAssignAgent(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600/50 outline-none transition-all"
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600/50 outline-none transition-all cursor-pointer"
                 >
                   <option value="">-- Direct / Unassigned --</option>
-                  {agents.map(agent => (
-                    <option key={agent.id} value={agent.id}>{agent.name}{agent.phone ? ` (${agent.phone})` : ''}</option>
+                  {agents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name}
+                      {agent.phone ? ` (${agent.phone})` : ""}
+                    </option>
                   ))}
                 </select>
                 {candidate.assigned_agent_id && (
                   <p className="text-[10px] text-blue-500 font-bold mt-1.5 flex items-center gap-1">
                     <UserPlus className="w-3 h-3" />
-                    {agents.find(a => a.id === candidate.assigned_agent_id)?.name || 'Agent'} is currently assigned
+                    {agents.find((a) => a.id === candidate.assigned_agent_id)
+                      ?.name || "Agent"}{" "}
+                    is currently assigned
                   </p>
                 )}
               </div>
@@ -507,25 +703,35 @@ export default function CandidateProfilePage() {
                 <select
                   value={candidate.assigned_staff_id || ""}
                   onChange={(e) => handleAssignStaff(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-600/50 outline-none transition-all"
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-600/50 outline-none transition-all cursor-pointer"
                 >
                   <option value="">-- Unassigned --</option>
-                  {staff.map(member => (
-                    <option key={member.id} value={member.id}>{member.email}</option>
+                  {staff.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.email}
+                    </option>
                   ))}
                 </select>
                 {candidate.assigned_staff_id && (
                   <p className="text-[10px] text-emerald-500 font-bold mt-1.5 flex items-center gap-1">
                     <Shield className="w-3 h-3" />
-                    {staff.find(s => s.id === candidate.assigned_staff_id)?.email || 'Staff'} is currently assigned
+                    {staff.find((s) => s.id === candidate.assigned_staff_id)
+                      ?.email || "Staff"}{" "}
+                    is currently assigned
                   </p>
                 )}
               </div>
 
               {/* STATUS */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Placement Status</label>
-                <select value={candidate.status || "Pending"} onChange={(e) => handleStatusChange(e.target.value)} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600/50 outline-none transition-all">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+                  Placement Status
+                </label>
+                <select
+                  value={candidate.status || "Pending"}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600/50 outline-none transition-all cursor-pointer"
+                >
                   <option value="Pending">Pending Review</option>
                   <option value="Interviewing">Interviewing</option>
                   <option value="Visa Processing">Visa Processing</option>
@@ -536,6 +742,7 @@ export default function CandidateProfilePage() {
             </div>
           </div>
 
+          {/* DOCUMENT VAULT */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm h-fit transition-colors duration-300">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -546,7 +753,7 @@ export default function CandidateProfilePage() {
               </span>
             </div>
 
-            {/* INLINE UPLOAD DROPZONE (Only active if user has canEdit permission) */}
+            {/* INLINE UPLOAD DROPZONE */}
             {canEdit && (
               <label className="relative border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 rounded-xl p-3.5 flex flex-col items-center justify-center cursor-pointer bg-slate-50/50 dark:bg-slate-950/50 hover:bg-blue-50/20 dark:hover:bg-blue-900/10 transition-all mb-4 group select-none">
                 <input
@@ -558,19 +765,24 @@ export default function CandidateProfilePage() {
                 />
                 {isUploadingDoc ? (
                   <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 py-1.5">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Attaching to Vault...
+                    <Loader2 className="w-4 h-4 animate-spin" /> Attaching to
+                    Vault...
                   </div>
                 ) : (
                   <div className="text-center">
                     <UploadCloud className="w-5 h-5 text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mx-auto mb-1" />
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">Click to attach document</span>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500">PDF, Passport Scan, Visa, Trade Cert</span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                      Click to attach document
+                    </span>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                      PDF, Passport Scan, Visa, Trade Cert
+                    </span>
                   </div>
                 )}
               </label>
             )}
 
-            {/* DOCUMENT LIST WITH TRUE VIEW & DELETE ACTIONS */}
+            {/* DOCUMENT LIST */}
             <div className="space-y-2.5 max-h-60 overflow-y-auto pr-0.5">
               {documents.length === 0 ? (
                 <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-6 bg-slate-50 dark:bg-slate-950 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
@@ -578,31 +790,60 @@ export default function CandidateProfilePage() {
                 </p>
               ) : (
                 documents.map((doc: any) => (
-                  <div key={doc.id || doc.title} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/80 border border-slate-200/80 dark:border-slate-800 rounded-xl hover:border-slate-300 dark:hover:border-slate-700 transition-all group">
+                  <div
+                    key={doc.id || doc.title}
+                    className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/80 border border-slate-200/80 dark:border-slate-800 rounded-xl hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
+                  >
                     <div className="min-w-0 pr-2">
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block" title={doc.title}>
+                      <span
+                        className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block"
+                        title={doc.title}
+                      >
                         {doc.title}
                       </span>
-                      <span className={`inline-block px-1.5 py-0.5 text-[8px] font-extrabold rounded border mt-1 uppercase tracking-wider ${doc.status === "Verified" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60" :
-                        doc.status === "Expired" ? "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 border-rose-200 dark:border-rose-800/60" :
-                          "bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 border-amber-200 dark:border-amber-800/60"
-                        }`}>
+                      <span
+                        className={`inline-block px-1.5 py-0.5 text-[8px] font-extrabold rounded border mt-1 uppercase tracking-wider ${doc.status === "Verified"
+                            ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60"
+                            : doc.status === "Expired"
+                              ? "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 border-rose-200 dark:border-rose-800/60"
+                              : "bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 border-amber-200 dark:border-amber-800/60"
+                          }`}
+                      >
                         {doc.status || "Uploaded"}
                       </span>
                     </div>
 
-                    {/* ACTION BUTTONS: View / Download & Delete */}
+                    {/* ACTION BUTTONS: Preview, Download, Delete */}
                     <div className="flex items-center gap-1.5 shrink-0">
+                      {/* 1. Preview Button */}
                       <button
                         type="button"
-                        onClick={() => handleViewOrDownload(doc)}
+                        onClick={() =>
+                          window.open(
+                            `/api/documents/${doc.id}/preview`,
+                            "_blank"
+                          )
+                        }
                         className="px-2.5 py-1.5 bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg border border-slate-200 dark:border-slate-800 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-                        title="View / Download File"
+                        title="Preview Document in Browser"
                       >
-                        <Download className="w-3 h-3" />
-                        <span>View</span>
+                        <Eye className="w-3 h-3" />
+                        <span>Preview</span>
                       </button>
 
+                      {/* 2. Direct Download Button */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          (window.location.href = `/api/documents/${doc.id}/download`)
+                        }
+                        className="p-1.5 bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-lg border border-slate-200 dark:border-slate-800 transition-all cursor-pointer shadow-2xs"
+                        title="Download File"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* 3. Delete Button */}
                       {canEdit && (
                         <button
                           type="button"
@@ -619,43 +860,76 @@ export default function CandidateProfilePage() {
               )}
             </div>
 
-            {/* FALLBACK MODAL TRIGGER */}
             <button
               onClick={() => setIsEditing(true)}
-              className="w-full mt-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-850 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-750 rounded-xl transition-all cursor-pointer shadow-2xs flex items-center justify-center gap-1.5"
+              className="w-full mt-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl transition-all cursor-pointer shadow-2xs flex items-center justify-center gap-1.5"
             >
               <span>Open Vault Manager</span>
             </button>
           </div>
-          <CandidateStatusLog candidateId={candidateId} candidateName={candidate.name} />
+
+          <CandidateStatusLog
+            candidateId={candidateId}
+            candidateName={candidate.name}
+          />
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm h-fit">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-blue-650" /> Interviews
+                <Calendar className="w-5 h-5 text-blue-600" /> Interviews
               </h2>
-              <button onClick={() => { setSelectedInterview(null); setIsInterviewOpen(true); }} className="px-2 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-800/40 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-bold border border-blue-100 dark:border-blue-900/50">
+              <button
+                onClick={() => {
+                  setSelectedInterview(null);
+                  setIsInterviewOpen(true);
+                }}
+                className="px-2 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-800/40 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-bold border border-blue-100 dark:border-blue-900/50 cursor-pointer"
+              >
                 Schedule
               </button>
             </div>
             <div className="space-y-3">
               {interviews.length === 0 ? (
-                <p className="text-xs text-slate-550 text-center py-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                <p className="text-xs text-slate-500 text-center py-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                   No interviews scheduled.
                 </p>
               ) : (
-                interviews.map(int => (
-                  <div key={int.id} className="p-3 bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl space-y-1.5 shadow-inner">
+                interviews.map((int) => (
+                  <div
+                    key={int.id}
+                    className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1.5 shadow-inner"
+                  >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-850 dark:text-slate-100">{int.interview_type}</span>
-                      <span className={`px-2 py-0.5 text-[9px] font-extrabold rounded border ${int.status === "Passed" ? "bg-emerald-50 text-emerald-650 dark:bg-emerald-950/20 dark:text-emerald-400 border-emerald-100" : int.status === "Failed" ? "bg-rose-50 text-rose-650 dark:bg-rose-950/20 dark:text-rose-450 border-rose-100" : "bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400 border-blue-100"}`}>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                        {int.interview_type}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 text-[9px] font-extrabold rounded border ${int.status === "Passed"
+                            ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 border-emerald-100"
+                            : int.status === "Failed"
+                              ? "bg-rose-50 text-rose-600 dark:bg-rose-950/20 dark:text-rose-400 border-rose-100"
+                              : "bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400 border-blue-100"
+                          }`}
+                      >
                         {int.status}
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-500">{new Date(int.interview_date).toLocaleString()}</p>
-                    {int.notes && <p className="text-[10px] text-slate-650 dark:text-slate-350 border-t border-slate-150 dark:border-slate-900 pt-1 italic font-medium">"{int.notes}"</p>}
+                    <p className="text-[10px] text-slate-500">
+                      {new Date(int.interview_date).toLocaleString()}
+                    </p>
+                    {int.notes && (
+                      <p className="text-[10px] text-slate-600 dark:text-slate-300 border-t border-slate-200 dark:border-slate-800 pt-1 italic font-medium">
+                        "{int.notes}"
+                      </p>
+                    )}
                     <div className="flex justify-end pt-1">
-                      <button onClick={() => { setSelectedInterview(int); setIsInterviewOpen(true); }} className="text-[9px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                      <button
+                        onClick={() => {
+                          setSelectedInterview(int);
+                          setIsInterviewOpen(true);
+                        }}
+                        className="text-[9px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      >
                         Reschedule / Update
                       </button>
                     </div>
@@ -667,11 +941,19 @@ export default function CandidateProfilePage() {
         </div>
       </div>
 
-      <CandidateEditor candidate={candidate} isOpen={isEditing} onClose={() => setIsEditing(false)} onRefresh={fetchEverything} />
+      <CandidateEditor
+        candidate={candidate}
+        isOpen={isEditing}
+        onClose={() => setIsEditing(false)}
+        onRefresh={fetchEverything}
+      />
 
       <InterviewScheduler
         isOpen={isInterviewOpen}
-        onClose={() => { setIsInterviewOpen(false); setSelectedInterview(null); }}
+        onClose={() => {
+          setIsInterviewOpen(false);
+          setSelectedInterview(null);
+        }}
         candidateId={candidateId}
         candidateName={candidate.name}
         interview={selectedInterview}
