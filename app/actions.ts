@@ -99,7 +99,6 @@ export async function getCandidateDetails(id: string) {
     prisma.candidate.findUnique({
       where: { id },
       include: {
-        // Inside getCandidateDetails in actions.ts
         documents: {
           orderBy: { created_at: 'desc' },
           select: {
@@ -110,7 +109,6 @@ export async function getCandidateDetails(id: string) {
             status: true,
             file_url: true,
             created_at: true,
-            // REMOVED updated_at: true because it doesn't exist in your schema!
           }
         },
         interviews: { orderBy: { interview_date: 'asc' } },
@@ -203,7 +201,6 @@ export async function getCandidatesList() {
 }
 
 export async function bulkDeleteCandidates(ids: string[]) {
-  // Delete related records in parallel to prevent foreign key issues fast
   await Promise.all([
     prisma.document.deleteMany({ where: { candidate_id: { in: ids } } }),
     prisma.interview.deleteMany({ where: { candidate_id: { in: ids } } }),
@@ -233,34 +230,15 @@ export async function deleteDocument(documentId: string) {
 
 export async function seedJobCategories() {
   const defaultCategories = [
-    "Construction Worker",
-    "Welder",
-    "Electrician",
-    "Plumber",
-    "Carpenter",
-    "Mason / Bricklayer",
-    "Heavy Equipment Operator",
-    "Scaffolder",
-    "Painter",
-    "Steel Fixer / Bar Bender",
-    "Forklift Operator",
-    "Rigger",
-    "Nurse",
-    "Caregiver",
-    "Driver (Heavy Vehicle)",
-    "Driver (Light Vehicle)",
-    "Security Guard",
-    "Housekeeping / Cleaning Staff",
-    "Cook / Kitchen Staff",
-    "Factory Worker",
-    "Tailor / Garment Worker",
-    "AC Technician / HVAC",
-    "Mechanical Technician",
-    "Civil Engineer",
-    "IT / Software Professional",
+    "Construction Worker", "Welder", "Electrician", "Plumber", "Carpenter",
+    "Mason / Bricklayer", "Heavy Equipment Operator", "Scaffolder", "Painter",
+    "Steel Fixer / Bar Bender", "Forklift Operator", "Rigger", "Nurse",
+    "Caregiver", "Driver (Heavy Vehicle)", "Driver (Light Vehicle)",
+    "Security Guard", "Housekeeping / Cleaning Staff", "Cook / Kitchen Staff",
+    "Factory Worker", "Tailor / Garment Worker", "AC Technician / HVAC",
+    "Mechanical Technician", "Civil Engineer", "IT / Software Professional",
   ];
 
-  // Batch insert all default categories in 1 query without throwing error on duplicates
   return await prisma.jobCategory.createMany({
     data: defaultCategories.map(name => ({ name })),
     skipDuplicates: true,
@@ -310,4 +288,42 @@ export async function bulkImportCandidates(rows: any[]) {
   }
 
   return { inserted, skipped, skippedNames };
+}
+
+// ==========================================
+// NEW: AGENT & TEAM MANAGEMENT ACTIONS
+// ==========================================
+
+export async function updateAgent(id: string, name: string, phone: string) {
+  try {
+    const updated = await prisma.agent.update({
+      where: { id },
+      data: { name, phone },
+    });
+    return updated;
+  } catch (error: any) {
+    throw new Error("Failed to update agent: " + error.message);
+  }
+}
+
+export async function deleteAgent(id: string) {
+  try {
+    await prisma.agent.delete({
+      where: { id },
+    });
+    return { success: true };
+  } catch (error: any) {
+    throw new Error("Failed to delete agent: " + error.message);
+  }
+}
+
+export async function deleteSystemUser(id: string) {
+  try {
+    await prisma.user.delete({
+      where: { id },
+    });
+    return { success: true };
+  } catch (error: any) {
+    throw new Error("Failed to delete system user: " + error.message);
+  }
 }
