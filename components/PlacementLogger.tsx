@@ -137,6 +137,8 @@ export default function PlacementLogger({
                                 onChange={(e) => setDestinationCountry(e.target.value)}
                                 className="w-full p-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all"
                             >
+                                <option value="Israel">Israel</option>
+                                <option value="Greece">Greece</option>
                                 <option value="UAE">United Arab Emirates</option>
                                 <option value="Saudi Arabia">Saudi Arabia</option>
                                 <option value="Qatar">Qatar</option>
