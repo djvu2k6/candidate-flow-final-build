@@ -5,8 +5,6 @@ import { Loader2, CheckCircle2, AlertCircle, Edit3, Database, UserPlus, Shield, 
 import { logAction } from "@/lib/audit";
 import { getMapsData, addJobCategory, addCandidate } from "@/app/actions";
 
-
-
 // Helper function to dynamically calculate age
 const calculateAge = (dobString: string) => {
   if (!dobString) return null;
@@ -24,8 +22,6 @@ export default function ResumeUploader() {
   const [status, setStatus] = useState<"idle" | "extracting" | "parsing" | "success" | "error" | "saving" | "saved">("idle");
   const [parsedData, setParsedData] = useState<any>(null);
   const [validationErrors, setValidationErrors] = useState<any>({});
-
-
 
   // Dropdown States
   const [agents, setAgents] = useState<any[]>([]);
@@ -174,7 +170,7 @@ export default function ResumeUploader() {
         gender: parsedData.gender || null,
         additional_info: {
           notes: parsedData.additionalInfo,
-          passport_expiry: parsedData.passportExpiry || null,
+          passport_expiry: parsedData.passportExpiry || null, // Cleanly saved in JSON without DB changes!
           documents_detected: parsedData.documentsFound || []
         },
         status: "Pending",
@@ -182,7 +178,6 @@ export default function ResumeUploader() {
         assigned_staff_id: selectedStaffId || null
       });
 
-      // THE FIX: Explicitly grab the id and cast it to a String
       const candidateId = String(newCandidate.id);
 
       // 2. If a CV file was selected, upload it to the Document Vault
@@ -230,7 +225,7 @@ export default function ResumeUploader() {
         Target Job Category <span className="text-red-500">*</span>
       </label>
 
-      {/* INLINE CREATION MODE (Unchanged & Preserved!) */}
+      {/* INLINE CREATION MODE */}
       {isAddingNewJob ? (
         <div className="flex flex-col gap-1 w-full animate-in fade-in zoom-in-95 duration-200">
           <div className="flex gap-2 w-full">
@@ -259,7 +254,7 @@ export default function ResumeUploader() {
             type="button"
             onClick={() => {
               setIsJobDropdownOpen(!isJobDropdownOpen);
-              if (!isJobDropdownOpen) setJobSearchQuery(""); // Clear search when reopening
+              if (!isJobDropdownOpen) setJobSearchQuery("");
             }}
             className={`w-full p-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all rounded-xl flex items-center justify-between text-left cursor-pointer shadow-2xs
             ${(!selectedJobCategory && status === "success")
@@ -284,7 +279,7 @@ export default function ResumeUploader() {
                   placeholder="Search category name..."
                   value={jobSearchQuery}
                   onChange={(e) => setJobSearchQuery(e.target.value)}
-                  onClick={(e) => e.stopPropagation()} // Prevents clicking input from closing menu
+                  onClick={(e) => e.stopPropagation()}
                   autoFocus
                   className="w-full pl-9 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-750 rounded-lg text-slate-900 dark:text-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium placeholder:text-slate-400 transition-all"
                 />
@@ -360,7 +355,31 @@ export default function ResumeUploader() {
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Full Name *</label>
             <input type="text" required value={manualData.name} onChange={e => setManualData({ ...manualData, name: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
           </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Email Address</label>
+            <input type="email" value={manualData.email} onChange={e => setManualData({ ...manualData, email: e.target.value })} className={`w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border ${validationErrors.email ? 'border-red-500' : 'border-slate-200 dark:border-slate-800'} rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all`} placeholder="candidate@example.com" />
+            {validationErrors.email && <p className="text-[10px] font-bold text-red-500 mt-1">{validationErrors.email}</p>}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Phone Number</label>
+            <input type="tel" value={manualData.phone} onChange={e => setManualData({ ...manualData, phone: e.target.value })} className={`w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border ${validationErrors.phone ? 'border-red-500' : 'border-slate-200 dark:border-slate-800'} rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all`} placeholder="+1 234 567 890" />
+            {validationErrors.phone && <p className="text-[10px] font-bold text-red-500 mt-1">{validationErrors.phone}</p>}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Gender</label>
+            <select value={manualData.gender} onChange={e => setManualData({ ...manualData, gender: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
+              <option value="">Select Gender...</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
           {renderJobCategorySelector()}
+
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Date of Birth *</label>
             <input type="date" required value={manualData.dob} onChange={e => setManualData({ ...manualData, dob: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
@@ -373,11 +392,19 @@ export default function ResumeUploader() {
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Passport Number *</label>
             <input type="text" required value={manualData.passport} onChange={e => setManualData({ ...manualData, passport: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 uppercase text-slate-900 dark:text-white transition-all" />
           </div>
+
+          {/* NEW PASSPORT EXPIRY INPUT ADDED HERE */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Passport Expiry</label>
+            <input type="date" value={manualData.passportExpiry} onChange={e => setManualData({ ...manualData, passportExpiry: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
+          </div>
+
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Target Destination</label>
             <select value={manualData.destination} onChange={e => setManualData({ ...manualData, destination: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
               <option value="">Select...</option>
               <option value="Israel">Israel</option>
+              <option value="Greece">Greece</option>
               <option value="UAE">United Arab Emirates</option>
               <option value="Saudi Arabia">Saudi Arabia</option>
               <option value="Qatar">Qatar</option>
@@ -386,6 +413,12 @@ export default function ResumeUploader() {
               <option value="USA">United States</option>
             </select>
           </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Full Address</label>
+            <input type="text" value={manualData.address} onChange={e => setManualData({ ...manualData, address: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="Enter candidate's full address..." />
+          </div>
+
           <div className="sm:col-span-2">
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Additional Skills</label>
             <input type="text" value={manualData.skills} onChange={e => setManualData({ ...manualData, skills: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="e.g. TIG Welding, Heavy Equipment" />
@@ -438,9 +471,37 @@ export default function ResumeUploader() {
                 <input type="text" value={parsedData.name} onChange={e => setParsedData({ ...parsedData, name: e.target.value })} className={`w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all ${!parsedData.name ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50' : 'bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800'}`} placeholder="Required" />
               </div>
               <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Email Address</label>
+                <input type="email" value={parsedData.email || ''} onChange={e => setParsedData({ ...parsedData, email: e.target.value })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Phone Number</label>
+                <input type="tel" value={parsedData.phone || ''} onChange={e => setParsedData({ ...parsedData, phone: e.target.value })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Gender</label>
+                <select value={parsedData.gender || ''} onChange={e => setParsedData({ ...parsedData, gender: e.target.value })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                  <option value="">Select...</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Address</label>
+                <input type="text" value={parsedData.address || ''} onChange={e => setParsedData({ ...parsedData, address: e.target.value })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800" />
+              </div>
+              <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Passport Number <span className="text-red-500">*</span></label>
                 <input type="text" value={parsedData.passport} onChange={e => setParsedData({ ...parsedData, passport: e.target.value })} className={`w-full p-2.5 text-sm uppercase outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all ${!parsedData.passport ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50' : 'bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800'}`} placeholder="Required" />
               </div>
+
+              {/* NEW PASSPORT EXPIRY VERIFICATION ADDED HERE */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Passport Expiry</label>
+                <input type="date" value={parsedData.passportExpiry || ''} onChange={e => setParsedData({ ...parsedData, passportExpiry: e.target.value })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800" />
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Date of Birth <span className="text-red-500">*</span></label>
                 <input type="date" value={parsedData.dob} onChange={e => setParsedData({ ...parsedData, dob: e.target.value })} className={`w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all ${!parsedData.dob ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50' : 'bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800'}`} />
@@ -456,13 +517,13 @@ export default function ResumeUploader() {
               </div>
             </div>
 
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 mt-4">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Additional Notes</label>
               <textarea rows={2} value={manualData.additionalInfo} onChange={e => setManualData({ ...manualData, additionalInfo: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="Add specific remarks, skills, or observations..." />
             </div>
 
             {/* NEW: CV/Resume File Uploader UI */}
-            <div className="sm:col-span-2 mt-2">
+            <div className="sm:col-span-2 mt-4">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
                 Upload CV / Resume (Optional)
               </label>
@@ -514,11 +575,7 @@ export default function ResumeUploader() {
             </div>
           </div>
 
-          <button type="submit" className="w-full mt-2 py-3 px-4 bg-slate-900 dark:bg-blue-600 hover:bg-black text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm">
-            <Edit3 className="w-4 h-4" /> Verify & Prepare Data
-          </button>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
             <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm flex items-end">
               {renderJobCategorySelector()}
             </div>

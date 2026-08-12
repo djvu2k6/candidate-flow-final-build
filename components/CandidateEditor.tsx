@@ -1,100 +1,215 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Save, UserPlus, Shield, Loader2, Briefcase } from "lucide-react";
-import { logAction } from "@/lib/audit";
-import { getMapsData, updateCandidate } from "@/app/actions";
+import { X, Loader2, Save, Briefcase, UserPlus, Shield, Mail, Phone, MapPin, Calendar, Users, FileText } from "lucide-react";
+import { updateCandidate, getMapsData } from "@/app/actions";
 
-export default function CandidateEditor({ candidate, isOpen, onClose, onRefresh }: any) {
-    const [formData, setFormData] = useState<any>({});
+interface CandidateEditorProps {
+    candidate: any;
+    isOpen: boolean;
+    onClose: () => void;
+    onRefresh: () => void;
+}
+
+export default function CandidateEditor({
+    candidate,
+    isOpen,
+    onClose,
+    onRefresh,
+}: CandidateEditorProps) {
     const [loading, setLoading] = useState(false);
-
-    // Dropdown Data
     const [jobs, setJobs] = useState<any[]>([]);
     const [agents, setAgents] = useState<any[]>([]);
     const [staff, setStaff] = useState<any[]>([]);
 
-    useEffect(() => {
-        if (candidate) {
-            setFormData({
-                name: candidate.name || "",
-                email: candidate.email || "",
-                phone: candidate.phone || "",
-                current_role: candidate.current_role || "",
-                passport_number: candidate.passport_number || "",
-                status: candidate.status || "Pending",
-                assigned_agent_id: candidate.assigned_agent_id || "",
-                assigned_staff_id: candidate.assigned_staff_id || ""
-            });
-        }
-    }, [candidate]);
+    // Comprehensive state for all old AND new fields
+    const [formData, setFormData] = useState({
+        name: "",
+        email: "",
+        phone: "",
+        address: "",
+        dob: "",
+        gender: "",
+        experience: "",
+        passport_number: "",
+        passport_expiry: "",
+        status: "Pending",
+        current_role: "",
+        assigned_agent_id: "",
+        assigned_staff_id: "",
+    });
 
     useEffect(() => {
         if (isOpen) {
-            const fetchDependencies = async () => {
-                const { jobs, agents, staff } = await getMapsData();
-                if (jobs) setJobs(jobs);
-                if (agents) setAgents(agents);
-                if (staff) setStaff(staff);
-            };
-            fetchDependencies();
+            // Fetch dropdown data when the modal opens
+            getMapsData().then((data) => {
+                if (data.jobs) setJobs(data.jobs);
+                if (data.agents) setAgents(data.agents);
+                if (data.staff) setStaff(data.staff);
+            });
+
+            // Pre-fill the form with existing candidate data
+            if (candidate) {
+                setFormData({
+                    name: candidate.name || "",
+                    email: candidate.email || "",
+                    phone: candidate.phone || "",
+                    address: candidate.address || "",
+                    dob: candidate.dob || "",
+                    gender: candidate.gender || "",
+                    experience: candidate.experience_years?.toString() || "",
+                    passport_number: candidate.passport_number || "",
+                    // Extract expiry cleanly from the JSON blob
+                    passport_expiry: candidate.additional_info?.passport_expiry || "",
+                    status: candidate.status || "Pending",
+                    current_role: candidate.current_role || "",
+                    assigned_agent_id: candidate.assigned_agent_id || "",
+                    assigned_staff_id: candidate.assigned_staff_id || "",
+                });
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, candidate]);
 
     if (!isOpen) return null;
 
-    const handleSave = async (e: React.FormEvent) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
         try {
-            await updateCandidate(candidate.id, {
+            // Package the data for the Prisma update
+            const payload = {
                 name: formData.name,
                 email: formData.email,
                 phone: formData.phone,
-                current_role: formData.current_role,
+                address: formData.address,
+                dob: formData.dob || null,
+                gender: formData.gender,
+                experience_years: parseInt(formData.experience, 10) || 0,
                 passport_number: formData.passport_number,
                 status: formData.status,
-                assigned_agent_id: formData.assigned_agent_id || null, // Saves the new Agent
-                assigned_staff_id: formData.assigned_staff_id || null  // Saves the new Staff
-            });
+                current_role: formData.current_role,
+                assigned_agent_id: formData.assigned_agent_id || null,
+                assigned_staff_id: formData.assigned_staff_id || null,
+                // Safely merge the passport expiry back into the JSON blob without deleting notes/documents
+                additional_info: {
+                    ...(candidate.additional_info || {}),
+                    passport_expiry: formData.passport_expiry || null,
+                },
+            };
 
-            await logAction("CANDIDATE_UPDATE", `Updated profile assignments for ${formData.name}`);
-            onRefresh(); // Forces the table to reload instantly
-            onClose();
-        } catch (error: any) {
-            alert("Error saving: " + error.message);
+            await updateCandidate(candidate.id, payload);
+            onRefresh(); // Refresh the parent page data
+            onClose();   // Close the slide-over
+        } catch (error) {
+            console.error("Failed to update candidate:", error);
+            alert("Failed to save changes. Please try again.");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/50 backdrop-blur-sm transition-opacity">
-            <div className="w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-sm transition-opacity">
+            <div className="w-full max-w-md bg-white dark:bg-slate-900 h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
 
-                <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50">
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white">Quick Edit Profile</h2>
-                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition-colors">
+                {/* Header */}
+                <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 z-10">
+                    <h2 className="text-xl font-black text-slate-900 dark:text-white">Quick Edit Profile</h2>
+                    <button
+                        onClick={onClose}
+                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+                    >
                         <X className="w-5 h-5" />
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6">
-                    <form id="edit-form" onSubmit={handleSave} className="space-y-5">
+                {/* Scrollable Form Body */}
+                <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
+                    <form id="edit-candidate-form" onSubmit={handleSubmit} className="space-y-5">
+
+                        {/* Core Details */}
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Full Name</label>
-                            <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-2.5 text-sm bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-blue-500" />
+                            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                                Full Name
+                            </label>
+                            <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Passport</label>
-                                <input type="text" value={formData.passport_number} onChange={e => setFormData({ ...formData, passport_number: e.target.value })} className="w-full p-2.5 text-sm uppercase bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-blue-500" />
+                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                                    <Mail className="w-3 h-3" /> Email
+                                </label>
+                                <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Status</label>
-                                <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="w-full p-2.5 text-sm bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-blue-500">
+                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                                    <Phone className="w-3 h-3" /> Phone
+                                </label>
+                                <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                                <MapPin className="w-3 h-3" /> Address
+                            </label>
+                            <input type="text" name="address" value={formData.address} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" /> Date of Birth
+                                </label>
+                                <input type="date" name="dob" value={formData.dob} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                                    <Users className="w-3 h-3" /> Gender
+                                </label>
+                                <select name="gender" value={formData.gender} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
+                                    <option value="">Select...</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Documentation & Career */}
+                        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                                    <FileText className="w-3 h-3" /> Passport
+                                </label>
+                                <input type="text" name="passport_number" value={formData.passport_number} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white uppercase transition-all" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                                    Passport Expiry
+                                </label>
+                                <input type="date" name="passport_expiry" value={formData.passport_expiry} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                                    Experience (Years)
+                                </label>
+                                <input type="number" name="experience" value={formData.experience} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                                    Status
+                                </label>
+                                <select name="status" value={formData.status} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
                                     <option value="Pending">Pending</option>
                                     <option value="Interviewing">Interviewing</option>
                                     <option value="Visa Processing">Visa Processing</option>
@@ -104,45 +219,61 @@ export default function CandidateEditor({ candidate, isOpen, onClose, onRefresh 
                             </div>
                         </div>
 
-                        <div>
-                            <label className="flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 mb-1.5 uppercase">
-                                <Briefcase className="w-3.5 h-3.5" /> Target Job Category
-                            </label>
-                            <select value={formData.current_role} onChange={e => setFormData({ ...formData, current_role: e.target.value })} className="w-full p-2.5 text-sm bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-blue-500">
-                                <option value="Uncategorized">Uncategorized</option>
-                                {jobs.map(j => <option key={j.id} value={j.name}>{j.name}</option>)}
-                            </select>
+                        {/* Job & Assignments */}
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-indigo-600 dark:text-indigo-400 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Briefcase className="w-4 h-4" /> Target Job Category
+                                </label>
+                                <select name="current_role" value={formData.current_role} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white transition-all">
+                                    <option value="">-- Select Category --</option>
+                                    {jobs.map((job) => (
+                                        <option key={job.id} value={job.name}>{job.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                                    <UserPlus className="w-4 h-4" /> Assigned Agent
+                                </label>
+                                <select name="assigned_agent_id" value={formData.assigned_agent_id} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
+                                    <option value="">-- Direct / Unassigned --</option>
+                                    {agents.map((agent) => (
+                                        <option key={agent.id} value={agent.id}>{agent.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Shield className="w-4 h-4" /> Internal Staff
+                                </label>
+                                <select name="assigned_staff_id" value={formData.assigned_staff_id} onChange={handleChange} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white transition-all">
+                                    <option value="">-- Unassigned --</option>
+                                    {staff.map((member) => (
+                                        <option key={member.id} value={member.id}>{member.email}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
 
-                        {/* SYNC FIX: AGENT DROPDOWN */}
-                        <div>
-                            <label className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 mb-1.5 uppercase">
-                                <UserPlus className="w-3.5 h-3.5" /> Assigned Agent
-                            </label>
-                            <select value={formData.assigned_agent_id} onChange={e => setFormData({ ...formData, assigned_agent_id: e.target.value })} className="w-full p-2.5 text-sm bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-blue-500">
-                                <option value="">-- Direct / Unassigned --</option>
-                                {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                            </select>
-                        </div>
-
-                        {/* SYNC FIX: STAFF DROPDOWN */}
-                        <div>
-                            <label className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1.5 uppercase">
-                                <Shield className="w-3.5 h-3.5" /> Internal Staff
-                            </label>
-                            <select value={formData.assigned_staff_id} onChange={e => setFormData({ ...formData, assigned_staff_id: e.target.value })} className="w-full p-2.5 text-sm bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-blue-500">
-                                <option value="">-- Unassigned --</option>
-                                {staff.map(s => <option key={s.id} value={s.id}>{s.email}</option>)}
-                            </select>
-                        </div>
                     </form>
                 </div>
 
-                <div className="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50">
-                    <button form="edit-form" type="submit" disabled={loading} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50">
-                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5" /> Save Changes</>}
+                {/* Footer Actions */}
+                <div className="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+                    <button
+                        type="submit"
+                        form="edit-candidate-form"
+                        disabled={loading}
+                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                    >
+                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                        {loading ? "Saving Changes..." : "Save Changes"}
                     </button>
                 </div>
+
             </div>
         </div>
     );
