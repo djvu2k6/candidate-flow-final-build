@@ -34,7 +34,9 @@ export default function ResumeUploader() {
   // Assignment States
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [selectedStaffId, setSelectedStaffId] = useState<string>("");
-  const [selectedJobCategory, setSelectedJobCategory] = useState<string>("");
+
+  // CHANGED: Now an array to support multiple jobs
+  const [selectedJobCategories, setSelectedJobCategories] = useState<string[]>([]);
 
   // Inline "Add New Category" States
   const [isAddingNewJob, setIsAddingNewJob] = useState(false);
@@ -42,8 +44,9 @@ export default function ResumeUploader() {
   const [jobError, setJobError] = useState("");
   const [cvFile, setCvFile] = useState<File | null>(null);
 
+  // CHANGED: Added alternatePhone
   const [manualData, setManualData] = useState({
-    name: "", email: "", phone: "", address: "",
+    name: "", email: "", phone: "", alternatePhone: "", address: "",
     passport: "", dob: "", destination: "",
     experience: "", education: "", skills: "",
     additionalInfo: "", passportExpiry: "", gender: ""
@@ -76,10 +79,17 @@ export default function ResumeUploader() {
     );
   }, [jobCategories, jobSearchQuery]);
 
-  const selectedJobObj = jobCategories.find(
-    j => String(j.id) === String(selectedJobCategory) || j.id === selectedJobCategory
-  );
-  const selectedJobName = selectedJobObj ? selectedJobObj.name : "-- Select Category --";
+  // NEW: Multi-select helper functions
+  const toggleJobCategory = (jobId: string) => {
+    setSelectedJobCategories(prev =>
+      prev.includes(jobId) ? prev.filter(id => id !== jobId) : [...prev, jobId]
+    );
+  };
+
+  const removeJobCategory = (e: React.MouseEvent, jobId: string) => {
+    e.stopPropagation();
+    setSelectedJobCategories(prev => prev.filter(id => id !== jobId));
+  };
 
   const validateForm = (dataToValidate: any) => {
     const errors: any = {};
@@ -91,7 +101,7 @@ export default function ResumeUploader() {
     if (dataToValidate.phone && digitsOnly.length > 0 && digitsOnly.length < 10) {
       errors.phone = "Phone number must be at least 10 digits.";
     }
-    if (!selectedJobCategory) {
+    if (selectedJobCategories.length === 0) {
       errors.jobCategory = "Job Category is required.";
     }
     setValidationErrors(errors);
@@ -106,6 +116,7 @@ export default function ResumeUploader() {
       name: manualData.name,
       email: manualData.email,
       phone: manualData.phone,
+      alternatePhone: manualData.alternatePhone, // Added here
       address: manualData.address,
       passport: manualData.passport,
       dob: manualData.dob,
@@ -138,7 +149,7 @@ export default function ResumeUploader() {
       const data = await addJobCategory(trimmedName);
       if (data) {
         setJobCategories(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
-        setSelectedJobCategory(data.id);
+        setSelectedJobCategories(prev => [...prev, data.id]);
         setNewJobName("");
         setIsAddingNewJob(false);
       }
@@ -152,7 +163,11 @@ export default function ResumeUploader() {
     setStatus("saving");
 
     try {
-      const selectedJob = jobCategories.find(j => j.id === selectedJobCategory);
+      // Map multiple IDs to string
+      const combinedRoles = selectedJobCategories
+        .map(id => jobCategories.find(j => String(j.id) === String(id))?.name)
+        .filter(Boolean)
+        .join(", ");
 
       // 1. Save the candidate first
       const newCandidate = await addCandidate({
@@ -160,7 +175,7 @@ export default function ResumeUploader() {
         email: parsedData.email,
         phone: parsedData.phone,
         address: parsedData.address,
-        current_role: selectedJob?.name || "Uncategorized",
+        current_role: combinedRoles || "Uncategorized",
         passport_number: parsedData.passport,
         dob: parsedData.dob || null,
         destination_country: parsedData.destination,
@@ -170,7 +185,8 @@ export default function ResumeUploader() {
         gender: parsedData.gender || null,
         additional_info: {
           notes: parsedData.additionalInfo,
-          passport_expiry: parsedData.passportExpiry || null, // Cleanly saved in JSON without DB changes!
+          passport_expiry: parsedData.passportExpiry || null,
+          alt_phone: parsedData.alternatePhone || null, // Saved securely in JSON
           documents_detected: parsedData.documentsFound || []
         },
         status: "Pending",
@@ -212,7 +228,7 @@ export default function ResumeUploader() {
     if (!parsedData.dob) missingFields.push("Date of Birth");
     if (!parsedData.passport) missingFields.push("Passport Number");
     if (parsedData.experienceYears === "" || parsedData.experienceYears === null) missingFields.push("Experience");
-    if (!selectedJobCategory) missingFields.push("Target Job Category");
+    if (selectedJobCategories.length === 0) missingFields.push("Target Job Category");
   }
   const needsCheckup = missingFields.length > 0;
 
@@ -222,7 +238,7 @@ export default function ResumeUploader() {
   const renderJobCategorySelector = () => (
     <div className="w-full relative select-none" ref={jobDropdownRef}>
       <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
-        Target Job Category <span className="text-red-500">*</span>
+        Target Job Categories <span className="text-red-500">*</span>
       </label>
 
       {/* INLINE CREATION MODE */}
@@ -247,25 +263,42 @@ export default function ResumeUploader() {
           {jobError && <p className="text-xs text-red-500 font-bold">{jobError}</p>}
         </div>
       ) : (
-        /* UPGRADED SEARCHABLE COMBOBOX */
+        /* UPGRADED MULTI-SELECT COMBOBOX */
         <div className="relative w-full">
           {/* Trigger Button */}
-          <button
-            type="button"
+          <div
             onClick={() => {
               setIsJobDropdownOpen(!isJobDropdownOpen);
               if (!isJobDropdownOpen) setJobSearchQuery("");
             }}
-            className={`w-full p-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all rounded-xl flex items-center justify-between text-left cursor-pointer shadow-2xs
-            ${(!selectedJobCategory && status === "success")
-                ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50'
-                : 'bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800'}`}
+            className={`w-full min-h-[42px] p-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all rounded-xl flex items-center flex-wrap gap-1.5 cursor-pointer shadow-2xs border ${(selectedJobCategories.length === 0 && status === "success")
+              ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50'
+              : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800'
+              }`}
           >
-            <span className={`truncate pr-2 ${!selectedJobCategory ? 'text-slate-400 dark:text-slate-500' : ''}`}>
-              {selectedJobName}
-            </span>
-            <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isJobDropdownOpen ? "rotate-180" : ""}`} />
-          </button>
+            {selectedJobCategories.length === 0 ? (
+              <span className="text-slate-400 dark:text-slate-500 pl-1 w-full flex justify-between items-center">
+                -- Select Categories -- <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isJobDropdownOpen ? "rotate-180" : ""}`} />
+              </span>
+            ) : (
+              <>
+                {selectedJobCategories.map(id => {
+                  const job = jobCategories.find(j => String(j.id) === String(id));
+                  return (
+                    <span key={id} className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs px-2 py-1 rounded-md flex items-center gap-1 font-bold">
+                      {job?.name}
+                      <button type="button" onClick={(e) => removeJobCategory(e, id)} className="hover:text-red-500 dark:hover:text-red-400 transition-colors">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+                <div className="ml-auto pl-2">
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isJobDropdownOpen ? "rotate-180" : ""}`} />
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Dropdown Menu with Search Bar */}
           {isJobDropdownOpen && (
@@ -293,14 +326,11 @@ export default function ResumeUploader() {
                   </div>
                 ) : (
                   filteredJobCategories.map((job) => {
-                    const isSelected = String(job.id) === String(selectedJobCategory) || job.id === selectedJobCategory;
+                    const isSelected = selectedJobCategories.includes(String(job.id));
                     return (
                       <div
                         key={job.id}
-                        onClick={() => {
-                          setSelectedJobCategory(job.id);
-                          setIsJobDropdownOpen(false);
-                        }}
+                        onClick={() => toggleJobCategory(String(job.id))}
                         className={`px-3 py-2.5 rounded-lg cursor-pointer transition-colors flex items-center justify-between truncate ${isSelected
                           ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold"
                           : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80"
@@ -319,7 +349,6 @@ export default function ResumeUploader() {
                 <div
                   onClick={() => {
                     setIsAddingNewJob(true);
-                    setSelectedJobCategory("");
                     setJobError("");
                     setIsJobDropdownOpen(false);
                   }}
@@ -364,8 +393,14 @@ export default function ResumeUploader() {
 
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Phone Number</label>
-            <input type="tel" value={manualData.phone} onChange={e => setManualData({ ...manualData, phone: e.target.value })} className={`w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border ${validationErrors.phone ? 'border-red-500' : 'border-slate-200 dark:border-slate-800'} rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all`} placeholder="+1 234 567 890" />
+            <input type="tel" value={manualData.phone} onChange={e => setManualData({ ...manualData, phone: e.target.value })} className={`w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border ${validationErrors.phone ? 'border-red-500' : 'border-slate-200 dark:border-slate-800'} rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all`} placeholder="+91 1234567890" />
             {validationErrors.phone && <p className="text-[10px] font-bold text-red-500 mt-1">{validationErrors.phone}</p>}
+          </div>
+
+          {/* NEW: ALTERNATE PHONE INPUT ADDED HERE */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Alternate Phone (Optional)</label>
+            <input type="tel" value={manualData.alternatePhone} onChange={e => setManualData({ ...manualData, alternatePhone: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="+91 1234567890" />
           </div>
 
           <div>
@@ -393,12 +428,10 @@ export default function ResumeUploader() {
             <input type="text" required value={manualData.passport} onChange={e => setManualData({ ...manualData, passport: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 uppercase text-slate-900 dark:text-white transition-all" />
           </div>
 
-          {/* NEW PASSPORT EXPIRY INPUT ADDED HERE */}
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Passport Expiry</label>
             <input type="date" value={manualData.passportExpiry} onChange={e => setManualData({ ...manualData, passportExpiry: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
           </div>
-
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Target Destination</label>
             <select value={manualData.destination} onChange={e => setManualData({ ...manualData, destination: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all">
@@ -478,6 +511,13 @@ export default function ResumeUploader() {
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Phone Number</label>
                 <input type="tel" value={parsedData.phone || ''} onChange={e => setParsedData({ ...parsedData, phone: e.target.value })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800" />
               </div>
+
+              {/* NEW: ALTERNATE PHONE ADDED TO VERIFICATION */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Alternate Phone</label>
+                <input type="tel" value={parsedData.alternatePhone || ''} onChange={e => setParsedData({ ...parsedData, alternatePhone: e.target.value })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800" />
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Gender</label>
                 <select value={parsedData.gender || ''} onChange={e => setParsedData({ ...parsedData, gender: e.target.value })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
@@ -496,7 +536,6 @@ export default function ResumeUploader() {
                 <input type="text" value={parsedData.passport} onChange={e => setParsedData({ ...parsedData, passport: e.target.value })} className={`w-full p-2.5 text-sm uppercase outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all ${!parsedData.passport ? 'bg-amber-50 border-amber-400 dark:bg-amber-900/20 dark:border-amber-700 ring-2 ring-amber-400/50' : 'bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800'}`} placeholder="Required" />
               </div>
 
-              {/* NEW PASSPORT EXPIRY VERIFICATION ADDED HERE */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Passport Expiry</label>
                 <input type="date" value={parsedData.passportExpiry || ''} onChange={e => setParsedData({ ...parsedData, passportExpiry: e.target.value })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800" />
@@ -519,10 +558,10 @@ export default function ResumeUploader() {
 
             <div className="sm:col-span-2 mt-4">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Additional Notes</label>
-              <textarea rows={2} value={manualData.additionalInfo} onChange={e => setManualData({ ...manualData, additionalInfo: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="Add specific remarks, skills, or observations..." />
+              <textarea rows={2} value={parsedData.additionalInfo || ''} onChange={e => setParsedData({ ...parsedData, additionalInfo: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="Add specific remarks, skills, or observations..." />
             </div>
 
-            {/* NEW: CV/Resume File Uploader UI */}
+            {/* CV/Resume File Uploader UI */}
             <div className="sm:col-span-2 mt-4">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
                 Upload CV / Resume (Optional)

@@ -350,11 +350,17 @@ export default function CandidateProfilePage() {
                   {displayId}
                 </span>
               </h1>
-              <p className="text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-4">
-                <span className="flex items-center gap-1">
-                  <Briefcase className="w-4 h-4" /> {candidate.current_role}
+              <p className="text-slate-500 dark:text-slate-400 mt-2 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                {/* NEW: MULTIPLE ROLE CHIPS ADDED HERE */}
+                <span className="flex items-center flex-wrap gap-1">
+                  <Briefcase className="w-4 h-4 mr-1" />
+                  {candidate.current_role?.split(',').map((role: string, i: number) => (
+                    <span key={i} className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md text-xs font-semibold">
+                      {role.trim()}
+                    </span>
+                  ))}
                 </span>
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1 text-sm font-medium">
                   <MapPin className="w-4 h-4" />{" "}
                   {candidate.destination_country ||
                     candidate.country ||
@@ -429,6 +435,8 @@ export default function CandidateProfilePage() {
                 {candidate.email || "No Email Provided"}
               </p>
             </div>
+
+            {/* NEW: ALTERNATE PHONE NUMBER DISPLAY ADDED HERE */}
             <div>
               <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5" /> Phone Number
@@ -436,6 +444,11 @@ export default function CandidateProfilePage() {
               <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
                 {candidate.phone || "No Phone Provided"}
               </p>
+              {candidate.additional_info?.alt_phone && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium flex items-center gap-1">
+                  <span className="opacity-70">Alt:</span> {candidate.additional_info.alt_phone}
+                </p>
+              )}
             </div>
 
             <div>
