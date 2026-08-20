@@ -25,7 +25,14 @@ export async function GET(
 
     const document = await (prisma.document as any).findUnique({
       where: { id },
+      // ADD THIS SELECT BLOCK:
+      select: {
+        file_data: true,
+        mime_type: true,
+        title: true,
+      }
     });
+
 
     if (!document || !document.file_data) {
       return NextResponse.json(
