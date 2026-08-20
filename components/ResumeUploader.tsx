@@ -22,6 +22,7 @@ export default function ResumeUploader() {
   const [status, setStatus] = useState<"idle" | "extracting" | "parsing" | "success" | "error" | "saving" | "saved">("idle");
   const [parsedData, setParsedData] = useState<any>(null);
   const [validationErrors, setValidationErrors] = useState<any>({});
+  const [cvFile2, setCvFile2] = useState<File | null>(null); // <--- Add it right here!
 
   // Dropdown States
   const [agents, setAgents] = useState<any[]>([]);
@@ -561,56 +562,110 @@ export default function ResumeUploader() {
               <textarea rows={2} value={parsedData.additionalInfo || ''} onChange={e => setParsedData({ ...parsedData, additionalInfo: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" placeholder="Add specific remarks, skills, or observations..." />
             </div>
 
-            {/* CV/Resume File Uploader UI */}
-            <div className="sm:col-span-2 mt-4">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
-                Upload CV / Resume (Optional)
-              </label>
+            <div className="sm:col-span-2 mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
 
-              {!cvFile ? (
-                <div className="relative group">
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setCvFile(e.target.files[0]);
-                      }
-                    }}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    title="Click to upload CV"
-                  />
-                  <div className="w-full p-6 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900/50 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-all flex flex-col items-center justify-center text-center">
-                    <div className="w-10 h-10 bg-white dark:bg-slate-800 shadow-sm rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                      <UploadCloud className="w-5 h-5 text-blue-500" />
-                    </div>
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Click or drag file to upload</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">PDF, DOCX, JPG, PNG (Max 5MB)</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="w-full p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 flex items-center justify-between">
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg shrink-0">
-                      <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div className="truncate">
-                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{cvFile.name}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                        {(cvFile.size / 1024 / 1024).toFixed(2)} MB
-                      </p>
+              {/* FIRST CV UPLOADER */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                  Upload Primary CV (Optional)
+                </label>
+                {!cvFile ? (
+                  <div className="relative group">
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setCvFile(e.target.files[0]);
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      title="Click to upload Primary CV"
+                    />
+                    <div className="w-full p-6 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900/50 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-all flex flex-col items-center justify-center text-center">
+                      <div className="w-10 h-10 bg-white dark:bg-slate-800 shadow-sm rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                        <UploadCloud className="w-5 h-5 text-blue-500" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Click or drag primary file</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">PDF, DOCX, JPG, PNG (Max 5MB)</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setCvFile(null)}
-                    className="p-2 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-slate-400 hover:text-rose-500 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 transition-colors shrink-0"
-                    title="Remove file"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
+                ) : (
+                  <div className="w-full p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 flex items-center justify-between">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg shrink-0">
+                        <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="truncate">
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{cvFile.name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                          {(cvFile.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCvFile(null)}
+                      className="p-2 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-slate-400 hover:text-rose-500 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 transition-colors shrink-0"
+                      title="Remove file"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* SECOND CV UPLOADER */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                  Upload Secondary CV (Optional)
+                </label>
+                {!cvFile2 ? (
+                  <div className="relative group">
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setCvFile2(e.target.files[0]);
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      title="Click to upload Secondary CV"
+                    />
+                    <div className="w-full p-6 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900/50 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-all flex flex-col items-center justify-center text-center">
+                      <div className="w-10 h-10 bg-white dark:bg-slate-800 shadow-sm rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                        <UploadCloud className="w-5 h-5 text-blue-500" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Click or drag secondary file</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">PDF, DOCX, JPG, PNG (Max 5MB)</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-full p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 flex items-center justify-between">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg shrink-0">
+                        <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="truncate">
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{cvFile2.name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                          {(cvFile2.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCvFile2(null)}
+                      className="p-2 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-slate-400 hover:text-rose-500 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 transition-colors shrink-0"
+                      title="Remove file"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
 

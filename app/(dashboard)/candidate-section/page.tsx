@@ -40,10 +40,19 @@ export default function CandidateSectionPage() {
     const [jobSearchQuery, setJobSearchQuery] = useState("");
     const [isJobDropdownOpen, setIsJobDropdownOpen] = useState(false);
 
-    // Filter job categories list based on user typing in the dropdown search
-    const filteredJobCategories = jobCategories.filter((cat) =>
-        cat.name.toLowerCase().includes(jobSearchQuery.toLowerCase())
-    );
+    // Filter & sort job categories list based on user typing in the dropdown search
+    // Priority: categories starting with the typed query come first, followed by categories containing it, then alphabetically sorted
+    const filteredJobCategories = jobCategories
+        .filter((cat) => cat.name?.toLowerCase().includes(jobSearchQuery.toLowerCase()))
+        .sort((a, b) => {
+            const q = jobSearchQuery.trim().toLowerCase();
+            if (!q) return (a.name || "").localeCompare(b.name || "");
+            const aStartsWith = (a.name || "").toLowerCase().startsWith(q);
+            const bStartsWith = (b.name || "").toLowerCase().startsWith(q);
+            if (aStartsWith && !bStartsWith) return -1;
+            if (!aStartsWith && bStartsWith) return 1;
+            return (a.name || "").localeCompare(b.name || "");
+        });
     // Multi-Select State
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 

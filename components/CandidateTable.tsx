@@ -109,10 +109,22 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
   };
 
   const filteredJobCategories = useMemo(() => {
-    if (!categorySearchQuery.trim()) return jobCategories;
-    return jobCategories.filter(job =>
-      job.name.toLowerCase().includes(categorySearchQuery.toLowerCase())
-    );
+    const q = categorySearchQuery.trim().toLowerCase();
+    const list = [...jobCategories];
+    if (!q) {
+      return list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    }
+    return list
+      .filter(job => job.name?.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aName = (a.name || "").toLowerCase();
+        const bName = (b.name || "").toLowerCase();
+        const aStartsWith = aName.startsWith(q);
+        const bStartsWith = bName.startsWith(q);
+        if (aStartsWith && !bStartsWith) return -1;
+        if (!aStartsWith && bStartsWith) return 1;
+        return (a.name || "").localeCompare(b.name || "");
+      });
   }, [jobCategories, categorySearchQuery]);
 
   useEffect(() => { loadMaps(); }, []);
@@ -195,28 +207,26 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
 
   return (
     <>
-      <div className="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col h-[700px] transition-colors duration-300">
-
-        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 rounded-t-2xl shrink-0 transition-colors duration-300">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-slate-900 dark:bg-slate-800 text-white dark:text-blue-400 rounded-lg">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-900 dark:text-white text-lg">Candidate Roster</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Scroll to view all {candidates.length} records</p>
-            </div>
+      <div className="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col h-full transition-colors duration-300">        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 rounded-t-2xl shrink-0 transition-colors duration-300">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-slate-900 dark:bg-slate-800 text-white dark:text-blue-400 rounded-lg">
+            <Users className="w-5 h-5" />
           </div>
-
-          <button
-            onClick={handleExportExcel}
-            disabled={filteredList.length === 0}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-slate-900 dark:bg-blue-600 rounded-lg hover:bg-black dark:hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 transition-colors shadow-sm cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            Export Filtered
-          </button>
+          <div>
+            <h3 className="font-bold text-slate-900 dark:text-white text-lg">Candidate Roster</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Scroll to view all {candidates.length} records</p>
+          </div>
         </div>
+
+        <button
+          onClick={handleExportExcel}
+          disabled={filteredList.length === 0}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-slate-900 dark:bg-blue-600 rounded-lg hover:bg-black dark:hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 transition-colors shadow-sm cursor-pointer"
+        >
+          <Download className="w-4 h-4" />
+          Export Filtered
+        </button>
+      </div>
 
         <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col gap-4 shrink-0">
           <div className="relative w-full">

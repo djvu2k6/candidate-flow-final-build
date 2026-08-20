@@ -44,7 +44,7 @@ export default function DashboardPage() {
     setLoading(true);
     try {
       const data = await getDashboardData();
-      
+
       const fetchedCandidates = data.candidates || [];
       setCandidates(fetchedCandidates as any);
       setAgents(data.agents as any);
@@ -193,8 +193,11 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
 
           {/* Main Candidates Roster (2 Cols) */}
-          <div className="xl:col-span-2 space-y-6">
-            <CandidateTable candidates={filteredCandidates} onRefresh={fetchDashboardData} />
+          {/* Main Candidates Roster (2 Cols) */}
+          <div className="xl:col-span-2 relative min-h-[500px]">
+            <div className="xl:absolute xl:inset-0 h-full">
+              <CandidateTable candidates={filteredCandidates} onRefresh={fetchDashboardData} />
+            </div>
           </div>
 
           {/* Widgets Sidebar Column (1 Col) */}
