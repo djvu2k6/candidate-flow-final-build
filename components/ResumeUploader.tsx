@@ -22,7 +22,7 @@ export default function ResumeUploader() {
   const [status, setStatus] = useState<"idle" | "extracting" | "parsing" | "success" | "error" | "saving" | "saved">("idle");
   const [parsedData, setParsedData] = useState<any>(null);
   const [validationErrors, setValidationErrors] = useState<any>({});
-  const [cvFile2, setCvFile2] = useState<File | null>(null); // <--- Add it right here!
+  const [cvFile2, setCvFile2] = useState<File | null>(null);
 
   // Dropdown States
   const [agents, setAgents] = useState<any[]>([]);
@@ -198,20 +198,39 @@ export default function ResumeUploader() {
       const candidateId = String(newCandidate.id);
 
       // 2. If a CV file was selected, upload it to the Document Vault
-      if (cvFile && candidateId) {
-        const formData = new FormData();
-        formData.append("file", cvFile);
-        formData.append("candidate_id", candidateId);
-        formData.append("title", `${parsedData.name} - CV/Resume`);
+      // Assuming you just created the candidate and have their ID stored in a variable like `newCandidateId`
 
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
+      try {
+        // 1. Upload Primary CV (if the user added one)
+        if (cvFile) {
+          const formData1 = new FormData();
+          formData1.append("file", cvFile);
+          formData1.append("candidate_id", candidateId);
+          formData1.append("title", "Primary CV - " + cvFile.name);
 
-        if (!uploadRes.ok) {
-          console.error("Failed to upload CV, but candidate was saved.");
+          await fetch("/api/upload", {
+            method: "POST",
+            body: formData1,
+          });
         }
+
+        // 2. Upload Secondary CV (if the user added one)
+        if (cvFile2) {
+          const formData2 = new FormData();
+          formData2.append("file", cvFile2);
+          formData2.append("candidate_id", candidateId);
+          formData2.append("title", "Secondary CV - " + cvFile2.name);
+
+          await fetch("/api/upload", {
+            method: "POST",
+            body: formData2,
+          });
+        }
+
+        // Done! Both files are now in the DB and will automatically show up in the Document Vault.
+
+      } catch (error) {
+        console.error("Error uploading CVs:", error);
       }
 
       await logAction("CANDIDATE_UPLOAD", `Uploaded candidate ${parsedData.name}`);
