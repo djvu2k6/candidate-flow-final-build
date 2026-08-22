@@ -34,6 +34,7 @@ import {
   UserPlus,
   Shield,
   Eye,
+  Clock,
 } from "lucide-react";
 import CandidateEditor from "@/components/CandidateEditor";
 import CandidateStatusLog from "@/components/CandidateStatusLog";
@@ -42,16 +43,64 @@ import InterviewScheduler from "@/components/InterviewScheduler";
 import PlacementLogger from "@/components/PlacementLogger";
 
 // Helper function to calculate exact age dynamically
-const calculateAge = (dobString: string) => {
+const calculateAge = (dobString: string, now: Date = new Date()) => {
   if (!dobString) return null;
   const birthDate = new Date(dobString);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+  let age = now.getFullYear() - birthDate.getFullYear();
+  const m = now.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < birthDate.getDate())) {
     age--;
   }
   return age;
+};
+
+// Helper function to calculate passport time remaining in Years, Months, and Days
+const calculatePassportTimeRemaining = (
+  expiryDateStr?: string,
+  now: Date = new Date()
+) => {
+  if (!expiryDateStr) return null;
+  const expiryDate = new Date(expiryDateStr);
+  if (isNaN(expiryDate.getTime())) return null;
+
+  const isExpired = expiryDate < now;
+  const diffMs = Math.abs(expiryDate.getTime() - now.getTime());
+  const totalDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  let start = isExpired ? expiryDate : now;
+  let end = isExpired ? now : expiryDate;
+
+  let years = end.getFullYear() - start.getFullYear();
+  let months = end.getMonth() - start.getMonth();
+  let days = end.getDate() - start.getDate();
+
+  if (days < 0) {
+    months--;
+    const prevMonthLastDay = new Date(
+      end.getFullYear(),
+      end.getMonth(),
+      0
+    ).getDate();
+    days += prevMonthLastDay;
+  }
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+
+  const parts = [];
+  if (years > 0) parts.push(`${years} ${years === 1 ? "Year" : "Years"}`);
+  if (months > 0) parts.push(`${months} ${months === 1 ? "Month" : "Months"}`);
+  parts.push(`${days} ${days === 1 ? "Day" : "Days"}`);
+
+  return {
+    isExpired,
+    years,
+    months,
+    days,
+    totalDays,
+    formattedStr: parts.join(", "),
+  };
 };
 
 const getPassportStatus = (expiryDateStr?: string) => {
@@ -102,6 +151,14 @@ export default function CandidateProfilePage() {
   const [loading, setLoading] = useState(true);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string>("staff");
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Dialog states
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
@@ -304,7 +361,7 @@ export default function CandidateProfilePage() {
     return <div className="p-8 text-red-500">Candidate not found.</div>;
 
   const displayId = `#CCC-${candidate.id.toString().slice(0, 6).toUpperCase()}`;
-  const age = candidate.dob ? calculateAge(candidate.dob) : null;
+  const age = candidate.dob ? calculateAge(candidate.dob, currentTime) : null;
   const isAgeWarning = age !== null && (age < 25 || age > 44);
   const canEdit = true;
 
@@ -590,6 +647,33 @@ export default function CandidateProfilePage() {
                     );
                   })()}
                 </p>
+              </div>
+
+              {/* Passport Expiry Time Remaining Countdown */}
+              <div className="pt-3 border-t border-slate-200/60 dark:border-slate-800/60">
+                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-blue-500" /> Time Remaining to Expiry
+                </p>
+                {(() => {
+                  const expiryVal =
+                    candidate.additional_info?.passport_expiry ||
+                    candidate.passport_expiry;
+                  const remaining = calculatePassportTimeRemaining(expiryVal, currentTime);
+                  if (!remaining) {
+                    return <p className="text-sm text-slate-400 italic mt-1">Not Recorded</p>;
+                  }
+                  return (
+                    <div className="mt-1 space-y-1">
+                      <p className={`text-base font-bold tracking-tight ${remaining.isExpired ? "text-rose-600 dark:text-rose-400" : remaining.totalDays < 180 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                        {remaining.isExpired ? `Expired ${remaining.formattedStr} ago` : remaining.formattedStr}
+                      </p>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                        {remaining.isExpired ? `${remaining.totalDays} total days past expiry (updates live)` : `${remaining.totalDays} total days left (updates live)`}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

@@ -6,6 +6,7 @@ import { Users, Download, CheckSquare, Square, Loader2, Filter, AlertTriangle, T
 import { logAction } from "@/lib/audit";
 import { getCurrentProfile, getCandidatesList, bulkDeleteCandidates } from "@/app/actions";
 import { Search, ChevronDown, Check, X } from "lucide-react";
+import * as XLSX from "xlsx";
 
 // Helper function to calculate exact age dynamically
 const calculateAge = (dobString: string) => {
@@ -18,6 +19,48 @@ const calculateAge = (dobString: string) => {
         age--;
     }
     return age;
+};
+
+// Helper function to calculate passport time left for Excel export
+const calculatePassportTimeLeft = (expiryDateStr?: string) => {
+    if (!expiryDateStr) return "N/A";
+    const expiryDate = new Date(expiryDateStr);
+    if (isNaN(expiryDate.getTime())) return "N/A";
+
+    const today = new Date();
+    const isExpired = expiryDate < today;
+
+    let start = isExpired ? expiryDate : today;
+    let end = isExpired ? today : expiryDate;
+
+    const diffMs = Math.abs(expiryDate.getTime() - today.getTime());
+
+    let years = end.getFullYear() - start.getFullYear();
+    let months = end.getMonth() - start.getMonth();
+    let days = end.getDate() - start.getDate();
+
+    if (days < 0) {
+        months--;
+        const prevMonthLastDay = new Date(
+            end.getFullYear(),
+            end.getMonth(),
+            0
+        ).getDate();
+        days += prevMonthLastDay;
+    }
+    if (months < 0) {
+        years--;
+        months += 12;
+    }
+
+    const parts = [];
+    if (years > 0) parts.push(`${years} ${years === 1 ? "Year" : "Years"}`);
+    if (months > 0) parts.push(`${months} ${months === 1 ? "Month" : "Months"}`);
+    if (days > 0 || parts.length === 0)
+        parts.push(`${days} ${days === 1 ? "Day" : "Days"}`);
+
+    const formattedStr = parts.join(", ");
+    return isExpired ? `Expired (${formattedStr} ago)` : formattedStr;
 };
 
 export default function CandidateSectionPage() {
@@ -113,37 +156,34 @@ export default function CandidateSectionPage() {
         setSelectedIds(newSet);
     };
 
-    // Bulk Export
-    const exportSelectedToExcel = () => {
+    // Bulk Export to Excel (.xlsx) with requested attributes
+    const exportSelectedToExcel = async () => {
         if (selectedIds.size === 0) return;
         const selectedData = candidates.filter(c => selectedIds.has(c.id));
 
-        const headers = ["Candidate ID", "Name", "Age", "Passport", "Phone", "Target Role", "Experience", "Agent"];
-        const rows = selectedData.map(c => {
-            const cccId = `#CCC-${c.id.toString().slice(0, 6).toUpperCase()}`;
-            const age = c.dob ? calculateAge(c.dob) : 'N/A';
-            return [
-                cccId,
-                `"${c.name || ''}"`,
-                age,
-                c.passport_number || '',
-                c.phone || '',
-                `"${c.current_role || ''}"`,
-                c.experience_years || 0,
-                `"${c.agents?.name || 'Unassigned'}"`
-            ].join(",");
+        const exportData = selectedData.map((c, idx) => {
+            const passportExpiry = c.additional_info?.passport_expiry || c.passport_expiry;
+            return {
+                "S. No": idx + 1,
+                "Name": c.name || "N/A",
+                "Job Profile": c.current_role || "Uncategorized",
+                "Date of Birth": c.dob ? new Date(c.dob).toLocaleDateString(undefined, { dateStyle: "medium" }) : "N/A",
+                "Age": c.dob ? calculateAge(c.dob) : "N/A",
+                "Passport No.": c.passport_number || "N/A",
+                "Date of Expairy": passportExpiry ? new Date(passportExpiry).toLocaleDateString(undefined, { dateStyle: "medium" }) : "N/A",
+                "Time Left for PP Expiry": calculatePassportTimeLeft(passportExpiry),
+                "Mobile No.": c.phone || "N/A",
+                "Email": c.email || "N/A",
+                "Gender": c.gender || "N/A",
+                "Agent": c.agents?.name || "Direct / None"
+            };
         });
 
-        const csvContent = [headers.join(","), ...rows].join("\n");
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", `Clockwise_Candidates_Export_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Selected Candidates");
+        XLSX.writeFile(workbook, `Clockwise_Candidates_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+        await logAction("EXCEL_EXPORT", `Exported ${selectedData.length} selected candidates to Excel`);
     };
 
     // NEW: Bulk Delete (Admin Only)

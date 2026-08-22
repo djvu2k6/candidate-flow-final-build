@@ -18,6 +18,58 @@ const calculateAge = (dobString: string) => {
   return age;
 };
 
+// Helper function to calculate passport expiry alert (< 3 years or expired)
+const calculatePassportExpiryAlert = (expiryDateStr?: string) => {
+  if (!expiryDateStr) return null;
+  const expiryDate = new Date(expiryDateStr);
+  if (isNaN(expiryDate.getTime())) return null;
+
+  const today = new Date();
+  const isExpired = expiryDate < today;
+
+  const threeYearsFromNow = new Date();
+  threeYearsFromNow.setFullYear(today.getFullYear() + 3);
+
+  const isLessThan3Years = expiryDate < threeYearsFromNow;
+
+  let start = isExpired ? expiryDate : today;
+  let end = isExpired ? today : expiryDate;
+
+  const diffMs = Math.abs(expiryDate.getTime() - today.getTime());
+  const totalDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  let years = end.getFullYear() - start.getFullYear();
+  let months = end.getMonth() - start.getMonth();
+  let days = end.getDate() - start.getDate();
+
+  if (days < 0) {
+    months--;
+    const prevMonthLastDay = new Date(
+      end.getFullYear(),
+      end.getMonth(),
+      0
+    ).getDate();
+    days += prevMonthLastDay;
+  }
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+
+  const parts = [];
+  if (years > 0) parts.push(`${years} ${years === 1 ? "Year" : "Years"}`);
+  if (months > 0) parts.push(`${months} ${months === 1 ? "Month" : "Months"}`);
+  if (days > 0 || parts.length === 0)
+    parts.push(`${days} ${days === 1 ? "Day" : "Days"}`);
+
+  return {
+    isExpired,
+    isLessThan3Years,
+    formattedStr: parts.join(", "),
+    totalDays,
+  };
+};
+
 export default function ResumeUploader() {
   const [status, setStatus] = useState<"idle" | "extracting" | "parsing" | "success" | "error" | "saving" | "saved">("idle");
   const [parsedData, setParsedData] = useState<any>(null);
@@ -451,6 +503,17 @@ export default function ResumeUploader() {
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Passport Expiry</label>
             <input type="date" value={manualData.passportExpiry} onChange={e => setManualData({ ...manualData, passportExpiry: e.target.value })} className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white transition-all" />
+            {manualData.passportExpiry && (() => {
+              const alert = calculatePassportExpiryAlert(manualData.passportExpiry);
+              if (!alert) return null;
+              if (alert.isExpired) {
+                return <p className="text-[10px] font-bold text-rose-500 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" /> Expired {alert.formattedStr} ago!</p>;
+              }
+              if (alert.isLessThan3Years) {
+                return <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" /> Expiring in {alert.formattedStr} (Less than 3 yrs)</p>;
+              }
+              return <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Valid ({alert.formattedStr} remaining)</p>;
+            })()}
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Target Destination</label>
@@ -512,6 +575,34 @@ export default function ResumeUploader() {
             </div>
           )}
 
+          {parsedData?.passportExpiry && (() => {
+            const passportAlert = calculatePassportExpiryAlert(parsedData.passportExpiry);
+            if (!passportAlert) return null;
+            return (
+              <div className={`p-3 rounded-xl border flex items-center gap-3 transition-colors ${
+                passportAlert.isExpired
+                  ? 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800/50 dark:text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
+                  : passportAlert.isLessThan3Years
+                  ? 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-900/20 dark:border-amber-700/60 dark:text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-800/50 dark:text-emerald-300'
+              }`}>
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <div>
+                  <p className="text-sm font-black">
+                    Passport Status: {passportAlert.isExpired ? `Expired ${passportAlert.formattedStr} ago` : `${passportAlert.formattedStr} remaining`}
+                  </p>
+                  {passportAlert.isExpired ? (
+                    <p className="text-xs font-medium">Critical Warning: Candidate's passport has already expired!</p>
+                  ) : passportAlert.isLessThan3Years ? (
+                    <p className="text-xs font-medium">Warning: Passport expiry is less than 3 years away ({passportAlert.totalDays} total days left).</p>
+                  ) : (
+                    <p className="text-xs font-medium">Passport is active and valid for over 3 years.</p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl">
             <div className="flex items-center gap-2 mb-4">
               <CheckCircle2 className="w-5 h-5 text-slate-900 dark:text-emerald-400" />
@@ -559,6 +650,17 @@ export default function ResumeUploader() {
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Passport Expiry</label>
                 <input type="date" value={parsedData.passportExpiry || ''} onChange={e => setParsedData({ ...parsedData, passportExpiry: e.target.value })} className="w-full p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white rounded-lg transition-all bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800" />
+                {parsedData.passportExpiry && (() => {
+                  const alert = calculatePassportExpiryAlert(parsedData.passportExpiry);
+                  if (!alert) return null;
+                  if (alert.isExpired) {
+                    return <p className="text-[10px] font-bold text-rose-500 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" /> Expired {alert.formattedStr} ago!</p>;
+                  }
+                  if (alert.isLessThan3Years) {
+                    return <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" /> Expiring in {alert.formattedStr} (Less than 3 yrs)</p>;
+                  }
+                  return <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Valid ({alert.formattedStr} remaining)</p>;
+                })()}
               </div>
 
               <div>

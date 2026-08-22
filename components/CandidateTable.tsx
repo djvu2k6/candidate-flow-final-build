@@ -47,6 +47,49 @@ const calculateAge = (dobString?: string) => {
   return age;
 };
 
+// Helper function to calculate passport time left for Excel export
+const calculatePassportTimeLeft = (expiryDateStr?: string) => {
+  if (!expiryDateStr) return "N/A";
+  const expiryDate = new Date(expiryDateStr);
+  if (isNaN(expiryDate.getTime())) return "N/A";
+
+  const today = new Date();
+  const isExpired = expiryDate < today;
+
+  let start = isExpired ? expiryDate : today;
+  let end = isExpired ? today : expiryDate;
+
+  const diffMs = Math.abs(expiryDate.getTime() - today.getTime());
+  const totalDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  let years = end.getFullYear() - start.getFullYear();
+  let months = end.getMonth() - start.getMonth();
+  let days = end.getDate() - start.getDate();
+
+  if (days < 0) {
+    months--;
+    const prevMonthLastDay = new Date(
+      end.getFullYear(),
+      end.getMonth(),
+      0
+    ).getDate();
+    days += prevMonthLastDay;
+  }
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+
+  const parts = [];
+  if (years > 0) parts.push(`${years} ${years === 1 ? "Year" : "Years"}`);
+  if (months > 0) parts.push(`${months} ${months === 1 ? "Month" : "Months"}`);
+  if (days > 0 || parts.length === 0)
+    parts.push(`${days} ${days === 1 ? "Day" : "Days"}`);
+
+  const formattedStr = parts.join(", ");
+  return isExpired ? `Expired (${formattedStr} ago)` : formattedStr;
+};
+
 export default function CandidateTable({ candidates, onRefresh }: CandidateTableProps) {
   const router = useRouter();
 
@@ -178,23 +221,23 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
   const handleExportExcel = async () => {
     if (filteredList.length === 0) return;
 
-    const exportData = filteredList.map((c) => {
+    const exportData = filteredList.map((c, idx) => {
       const agentIdStr = c.assigned_agent_id ? String(c.assigned_agent_id) : null;
-      const staffIdStr = c.assigned_staff_id ? String(c.assigned_staff_id) : null;
+      const passportExpiry = c.notes || (c as any).additional_info?.passport_expiry || (c as any).passport_expiry;
 
       return {
-        "Full Name": c.name,
+        "S. No": idx + 1,
+        "Name": c.name || "N/A",
+        "Job Profile": c.current_role || "Uncategorized",
+        "Date of Birth": c.dob ? new Date(c.dob).toLocaleDateString(undefined, { dateStyle: "medium" }) : "N/A",
         "Age": c.dob ? calculateAge(c.dob) : "N/A",
+        "Passport No.": c.passport_number || "N/A",
+        "Date of Expairy": passportExpiry ? new Date(passportExpiry).toLocaleDateString(undefined, { dateStyle: "medium" }) : "N/A",
+        "Time Left for PP Expiry": calculatePassportTimeLeft(passportExpiry),
+        "Mobile No.": c.phone || "N/A",
+        "Email": c.email || "N/A",
         "Gender": c.gender || "N/A",
-        "Email Address": c.email || "N/A",
-        "Phone Number": c.phone || "N/A",
-        "Target Job Category": c.current_role || "Uncategorized",
-        "Years Exp": c.experience_years || 0,
-        "Passport Number": c.passport_number || "N/A",
-        "Source Agent": agentIdStr ? agentsMap[agentIdStr] || "Unknown" : "Direct / None",
-        "Assigned Staff": staffIdStr ? staffMap[staffIdStr] || "Unknown" : "Unassigned",
-        "Application Status": c.status,
-        "Date Added": new Date(c.created_at).toLocaleDateString(),
+        "Agent": agentIdStr ? agentsMap[agentIdStr] || "Unknown" : "Direct / None",
       };
     });
 
