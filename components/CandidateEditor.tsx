@@ -41,9 +41,11 @@ export default function CandidateEditor({
     });
 
     useEffect(() => {
+        let isSubscribed = true;
         if (isOpen) {
             // Fetch dropdown data when the modal opens
             getMapsData().then((data) => {
+                if (!isSubscribed) return;
                 if (data.jobs) setJobs(data.jobs);
                 if (data.agents) setAgents(data.agents);
                 if (data.staff) setStaff(data.staff);
@@ -71,6 +73,7 @@ export default function CandidateEditor({
                 });
             }
         }
+        return () => { isSubscribed = false; };
     }, [isOpen, candidate]);
 
     if (!isOpen) return null;

@@ -129,9 +129,16 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
   useEffect(() => { agentsMapRef.current = agentsMap; }, [agentsMap]);
   useEffect(() => { staffMapRef.current = staffMap; }, [staffMap]);
 
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
   const loadMaps = async () => {
     try {
       const { jobs, agents, staff } = await getMapsData();
+      if (!isMountedRef.current) return;
 
       if (jobs) setJobCategories(jobs);
 

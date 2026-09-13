@@ -50,11 +50,43 @@ export async function updateCandidate(id: string, data: any) {
 
 export async function getAgentsAndTeam() {
   const [agents, team] = await Promise.all([
-    prisma.agent.findMany({ orderBy: { created_at: 'desc' } }),
+    prisma.agent.findMany({
+      orderBy: { created_at: 'desc' },
+      include: {
+        _count: {
+          select: {
+            assignedCandidates: true,
+            candidates: true
+          }
+        }
+      }
+    }),
     prisma.user.findMany({ orderBy: { created_at: 'desc' } })
   ]);
 
   return { agents, team };
+}
+
+export async function getCandidatesByAgent(agentId: string) {
+  return await prisma.candidate.findMany({
+    where: {
+      OR: [
+        { assigned_agent_id: agentId },
+        { agent_id: agentId }
+      ]
+    },
+    orderBy: { created_at: 'desc' },
+    select: {
+      id: true,
+      name: true,
+      passport_number: true,
+      current_role: true,
+      status: true,
+      dob: true,
+      experience_years: true,
+      created_at: true,
+    }
+  });
 }
 
 export async function addAgent(name: string, phone: string) {
@@ -99,6 +131,8 @@ export async function getCandidateDetails(id: string) {
     prisma.candidate.findUnique({
       where: { id },
       include: {
+        agent: { select: { id: true, name: true, phone: true } },
+        assigned_agent: { select: { id: true, name: true, phone: true } },
         documents: {
           orderBy: { created_at: 'desc' },
           select: {
@@ -183,7 +217,8 @@ export async function getCandidatesList() {
     prisma.candidate.findMany({
       orderBy: { created_at: 'desc' },
       include: {
-        agent: { select: { name: true } }
+        agent: { select: { name: true } },
+        assigned_agent: { select: { name: true } }
       }
     }),
     prisma.jobCategory.findMany({
@@ -192,10 +227,13 @@ export async function getCandidatesList() {
     })
   ]);
 
-  const formattedCandidates = candidates.map(c => ({
-    ...c,
-    agents: c.agent ? { name: c.agent.name } : null
-  }));
+  const formattedCandidates = candidates.map(c => {
+    const agentObj = c.assigned_agent || c.agent;
+    return {
+      ...c,
+      agents: agentObj ? { name: agentObj.name } : null
+    };
+  });
 
   return { candidates: formattedCandidates, jobCategories };
 }
