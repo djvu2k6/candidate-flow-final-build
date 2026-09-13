@@ -4,22 +4,13 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 
 export async function getDashboardData() {
-  // Execute all dashboard queries concurrently to prevent connection pool starvation
-  const [
-    candidates,
-    pendingDocsCount,
-    scheduledInterviewsCount,
-    allInterviews,
-    allPlacements,
-    agents
-  ] = await Promise.all([
-    prisma.candidate.findMany({ orderBy: { created_at: 'desc' } }),
-    prisma.document.count({ where: { status: 'Pending' } }),
-    prisma.interview.count({ where: { status: 'Scheduled' } }),
-    prisma.interview.findMany({ select: { created_at: true } }),
-    prisma.placement.findMany({ select: { created_at: true } }),
-    prisma.agent.findMany({ orderBy: { created_at: 'desc' }, take: 5 }),
-  ]);
+  // Executing sequentially to protect the InterServer connection pool
+  const candidates = await prisma.candidate.findMany({ orderBy: { created_at: 'desc' } });
+  const pendingDocsCount = await prisma.document.count({ where: { status: 'Pending' } });
+  const scheduledInterviewsCount = await prisma.interview.count({ where: { status: 'Scheduled' } });
+  const allInterviews = await prisma.interview.findMany({ select: { created_at: true } });
+  const allPlacements = await prisma.placement.findMany({ select: { created_at: true } });
+  const agents = await prisma.agent.findMany({ orderBy: { created_at: 'desc' }, take: 5 });
 
   return {
     candidates,
@@ -32,11 +23,10 @@ export async function getDashboardData() {
 }
 
 export async function getMapsData() {
-  const [jobs, agents, staff] = await Promise.all([
-    prisma.jobCategory.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    prisma.agent.findMany({ select: { id: true, name: true } }),
-    prisma.user.findMany({ select: { id: true, email: true } })
-  ]);
+  // Executing sequentially
+  const jobs = await prisma.jobCategory.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } });
+  const agents = await prisma.agent.findMany({ select: { id: true, name: true } });
+  const staff = await prisma.user.findMany({ select: { id: true, email: true } });
 
   return { jobs, agents, staff };
 }
