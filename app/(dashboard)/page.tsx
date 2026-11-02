@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import {
   FileText, Users, Clock, Calendar, Search, Activity, BarChart3, Plus, Loader2,
-  Brain, Briefcase, Zap, CheckCircle2, Shield, UserCheck
+  Brain, Briefcase, Zap, CheckCircle2, Shield, UserCheck, X
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import ResumeUploader from "@/components/ResumeUploader";
@@ -94,8 +94,12 @@ function DashboardInner() {
   // Keep URL in sync when search changes (replaceState keeps back-nav working)
   const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value);
-    const params = new URLSearchParams();
-    if (value) params.set("q", value);
+    const params = new URLSearchParams(window.location.search);
+    if (value.trim()) {
+      params.set("q", value.trim());
+    } else {
+      params.delete("q");
+    }
     const newURL = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     window.history.replaceState(null, "", newURL);
   }, [pathname]);
@@ -145,8 +149,18 @@ function DashboardInner() {
               placeholder="Quick search..."
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border border-transparent rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              className="w-full pl-9 pr-8 py-2 bg-slate-100 dark:bg-slate-800 border border-transparent rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => handleSearchChange("")}
+                className="absolute right-2.5 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                title="Clear quick search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           <ThemeToggle />

@@ -1,13 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { Download, FileText, Users, Edit, AlertTriangle, Search, UserPlus, Shield } from "lucide-react";
+import { Download, FileText, Users, Edit, AlertTriangle, Search, UserPlus, Shield, Check, ChevronDown, X } from "lucide-react";
 import * as XLSX from "xlsx";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import CandidateEditor from "./CandidateEditor";
 import { logAction } from "@/lib/audit";
 import { getMapsData } from "@/app/actions";
-import { Check, ChevronDown } from "lucide-react";
 
 export interface Candidate {
   id: string;
@@ -60,7 +59,6 @@ const calculatePassportTimeLeft = (expiryDateStr?: string) => {
   let end = isExpired ? today : expiryDate;
 
   const diffMs = Math.abs(expiryDate.getTime() - today.getTime());
-  const totalDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
   let years = end.getFullYear() - start.getFullYear();
   let months = end.getMonth() - start.getMonth();
@@ -90,8 +88,18 @@ const calculatePassportTimeLeft = (expiryDateStr?: string) => {
   return isExpired ? `Expired (${formattedStr} ago)` : formattedStr;
 };
 
+// URL and SessionStorage keys used by CandidateTable
+const PARAM_SEARCH   = "t_q";
+const PARAM_STATUS   = "t_status";
+const PARAM_EXP      = "t_exp";
+const PARAM_CATEGORY = "t_cat";
+const PARAM_GENDER   = "t_gender";
+const STORAGE_KEY    = "candidate_table_filters";
+
 export default function CandidateTable({ candidates, onRefresh }: CandidateTableProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
 
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
 
@@ -105,14 +113,84 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
 
   // Refs to avoid stale closures
   const agentsMapRef = useRef<Record<string, string>>({});
-  const staffMapRef = useRef<Record<string, string>>({});
+  const staffMapRef  = useRef<Record<string, string>>({});
 
-  // Filters & Search State
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [expFilter, setExpFilter] = useState("All");
-  const [categoryFilter, setCategoryFilter] = useState("All");
-  const [genderFilter, setGenderFilter] = useState("All");
+  // Helper to read initial filter values from URL first, then sessionStorage as backup
+  const getInitialValue = (paramKey: string, sessionKey: string, defaultValue: string = "All") => {
+    const fromUrl = searchParams.get(paramKey);
+    if (fromUrl !== null && fromUrl !== undefined) {
+      return fromUrl;
+    }
+    if (typeof window !== "undefined") {
+      try {
+        const saved = sessionStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed[sessionKey] !== undefined && parsed[sessionKey] !== null) {
+            return parsed[sessionKey];
+          }
+        }
+      } catch (e) {
+        // Ignore JSON error
+      }
+    }
+    return defaultValue;
+  };
+
+  // Filters & Search State — initialised from URL/sessionStorage so back-nav restores them
+  const [searchQuery,   setSearchQuery]   = useState(() => getInitialValue(PARAM_SEARCH,   "q",      ""));
+  const [statusFilter,  setStatusFilter]  = useState(() => getInitialValue(PARAM_STATUS,   "status", "All"));
+  const [expFilter,     setExpFilter]     = useState(() => getInitialValue(PARAM_EXP,      "exp",    "All"));
+  const [categoryFilter,setCategoryFilter]= useState(() => getInitialValue(PARAM_CATEGORY, "cat",    "All"));
+  const [genderFilter,  setGenderFilter]  = useState(() => getInitialValue(PARAM_GENDER,   "gender", "All"));
+
+  // Sync all filter values into the URL and sessionStorage
+  const syncFilters = (q: string, status: string, exp: string, cat: string, gender: string) => {
+    if (typeof window !== "undefined") {
+      try {
+        const filtersObj = { q, status, exp, cat, gender };
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(filtersObj));
+      } catch (e) {}
+
+      const params = new URLSearchParams(window.location.search);
+      q.trim() !== "" ? params.set(PARAM_SEARCH, q.trim()) : params.delete(PARAM_SEARCH);
+      status !== "All" ? params.set(PARAM_STATUS, status) : params.delete(PARAM_STATUS);
+      exp !== "All" ? params.set(PARAM_EXP, exp) : params.delete(PARAM_EXP);
+      cat !== "All" ? params.set(PARAM_CATEGORY, cat) : params.delete(PARAM_CATEGORY);
+      gender !== "All" ? params.set(PARAM_GENDER, gender) : params.delete(PARAM_GENDER);
+
+      const newURL = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+      window.history.replaceState(null, "", newURL);
+    }
+  };
+
+  // On initial mount, ensure URL is in sync if filters were restored from sessionStorage
+  useEffect(() => {
+    syncFilters(searchQuery, statusFilter, expFilter, categoryFilter, genderFilter);
+  }, []);
+
+  // Individual setters that also update the URL & sessionStorage
+  const handleSearch   = (v: string) => { setSearchQuery(v);    syncFilters(v, statusFilter, expFilter, categoryFilter, genderFilter); };
+  const handleStatus   = (v: string) => { setStatusFilter(v);   syncFilters(searchQuery, v, expFilter, categoryFilter, genderFilter); };
+  const handleExp      = (v: string) => { setExpFilter(v);      syncFilters(searchQuery, statusFilter, v, categoryFilter, genderFilter); };
+  const handleCategory = (v: string) => { setCategoryFilter(v); syncFilters(searchQuery, statusFilter, expFilter, v, genderFilter); };
+  const handleGender   = (v: string) => { setGenderFilter(v);   syncFilters(searchQuery, statusFilter, expFilter, categoryFilter, v); };
+
+  const handleResetAllFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("All");
+    setExpFilter("All");
+    setCategoryFilter("All");
+    setGenderFilter("All");
+    syncFilters("", "All", "All", "All", "All");
+  };
+
+  const hasActiveFilters =
+    categoryFilter !== "All" ||
+    statusFilter !== "All" ||
+    expFilter !== "All" ||
+    genderFilter !== "All" ||
+    searchQuery.trim() !== "";
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -124,10 +202,8 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-
-
   useEffect(() => { agentsMapRef.current = agentsMap; }, [agentsMap]);
-  useEffect(() => { staffMapRef.current = staffMap; }, [staffMap]);
+  useEffect(() => { staffMapRef.current  = staffMap;  }, [staffMap]);
 
   const isMountedRef = useRef(true);
   useEffect(() => {
@@ -217,7 +293,12 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
       if (genderFilter !== "All" && (c.gender || "") !== genderFilter) return false;
 
       if (categoryFilter !== "All") {
-        const matchesCategory = c.current_role && c.current_role.toLowerCase() === categoryFilter.toLowerCase();
+        const catLower = categoryFilter.toLowerCase();
+        const candRoleLower = (c.current_role || "").toLowerCase();
+        const matchesCategory =
+          candRoleLower === catLower ||
+          candRoleLower.split(',').map((r: string) => r.trim()).includes(catLower);
+
         if (!matchesCategory) return false;
       }
 
@@ -257,43 +338,57 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
 
   return (
     <>
-      <div className="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col h-full transition-colors duration-300">        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 rounded-t-2xl shrink-0 transition-colors duration-300">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-slate-900 dark:bg-slate-800 text-white dark:text-blue-400 rounded-lg">
-            <Users className="w-5 h-5" />
+      <div className="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col h-full transition-colors duration-300">
+        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 rounded-t-2xl shrink-0 transition-colors duration-300">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-slate-900 dark:bg-slate-800 text-white dark:text-blue-400 rounded-lg">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-lg">Candidate Roster</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Scroll to view all {candidates.length} records</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-slate-900 dark:text-white text-lg">Candidate Roster</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Scroll to view all {candidates.length} records</p>
-          </div>
+
+          <button
+            onClick={handleExportExcel}
+            disabled={filteredList.length === 0}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-slate-900 dark:bg-blue-600 rounded-lg hover:bg-black dark:hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 transition-colors shadow-sm cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            Export Filtered
+          </button>
         </div>
 
-        <button
-          onClick={handleExportExcel}
-          disabled={filteredList.length === 0}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-slate-900 dark:bg-blue-600 rounded-lg hover:bg-black dark:hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 transition-colors shadow-sm cursor-pointer"
-        >
-          <Download className="w-4 h-4" />
-          Export Filtered
-        </button>
-      </div>
-
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col gap-4 shrink-0">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col gap-3 shrink-0">
+          {/* Main Search Input */}
           <div className="relative w-full">
             <Search className="absolute left-3 top-2.5 h-5 w-5 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               placeholder="Search by Name, Passport, Target Job, or Skills..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-slate-400"
+              onChange={(e) => handleSearch(e.target.value)}
+              className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-slate-400"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => handleSearch("")}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
 
+          {/* Filter Dropdowns */}
           <div className="flex flex-wrap gap-4 items-center">
+            {/* Status */}
             <div className="flex-1 min-w-[140px]">
-              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Status</label>
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full p-2 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
+              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Status</label>
+              <select value={statusFilter} onChange={(e) => handleStatus(e.target.value)} className="w-full p-2 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-semibold cursor-pointer">
                 <option value="All">All Statuses</option>
                 <option value="Pending">Pending Review</option>
                 <option value="Interviewing">Interviewing</option>
@@ -302,15 +397,18 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                 <option value="Rejected">Rejected</option>
               </select>
             </div>
+
+            {/* Experience */}
             <div className="flex-1 min-w-[140px]">
-              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Experience</label>
-              <select value={expFilter} onChange={(e) => setExpFilter(e.target.value)} className="w-full p-2 text-xs bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
+              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Experience</label>
+              <select value={expFilter} onChange={(e) => handleExp(e.target.value)} className="w-full p-2 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-semibold cursor-pointer">
                 <option value="All">All Experience</option>
                 <option value="0-2">0 - 2 Years</option>
                 <option value="3-5">3 - 5 Years</option>
                 <option value="5+">5+ Years</option>
               </select>
             </div>
+
             {/* SEARCHABLE TARGET JOB DROPDOWN */}
             <div className="flex-1 min-w-[160px] relative select-none" ref={categoryDropdownRef}>
               <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">
@@ -329,13 +427,26 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                 <span className="truncate pr-2">
                   {categoryFilter === "All" ? "All Categories" : categoryFilter}
                 </span>
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${isCategoryDropdownOpen ? "rotate-180" : ""}`} />
+                <div className="flex items-center gap-1 shrink-0">
+                  {categoryFilter !== "All" && (
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCategory("All");
+                      }}
+                      className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                      title="Clear category filter"
+                    >
+                      <X className="w-3 h-3" />
+                    </span>
+                  )}
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isCategoryDropdownOpen ? "rotate-180" : ""}`} />
+                </div>
               </button>
 
               {/* Dropdown Menu with Search Bar */}
               {isCategoryDropdownOpen && (
                 <div className="absolute left-0 top-full mt-1.5 w-full min-w-[220px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-
                   {/* Inline Search Input */}
                   <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 relative">
                     <Search className="w-3.5 h-3.5 absolute left-4 top-4 text-slate-400 shrink-0" />
@@ -355,7 +466,7 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                     {/* "All Categories" Option */}
                     <div
                       onClick={() => {
-                        setCategoryFilter("All");
+                        handleCategory("All");
                         setIsCategoryDropdownOpen(false);
                       }}
                       className={`px-3 py-2 rounded-lg cursor-pointer transition-colors flex items-center justify-between ${categoryFilter === "All"
@@ -377,7 +488,7 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                         <div
                           key={job.id}
                           onClick={() => {
-                            setCategoryFilter(job.name);
+                            handleCategory(job.name);
                             setIsCategoryDropdownOpen(false);
                           }}
                           className={`px-3 py-2 rounded-lg cursor-pointer transition-colors flex items-center justify-between truncate ${categoryFilter === job.name
@@ -394,9 +505,11 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                 </div>
               )}
             </div>
+
+            {/* Gender */}
             <div className="flex-1 min-w-[120px]">
-              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Gender</label>
-              <select value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)} className="w-full p-2 text-xs bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
+              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Gender</label>
+              <select value={genderFilter} onChange={(e) => handleGender(e.target.value)} className="w-full p-2 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-semibold cursor-pointer">
                 <option value="All">All Genders</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
@@ -404,6 +517,87 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
               </select>
             </div>
           </div>
+
+          {/* ACTIVE FILTER BADGES ROW — shows clearly what is filtered & provides 1-click close */}
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800/60">
+              <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                Active Filters:
+              </span>
+              {categoryFilter !== "All" && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                  Role: {categoryFilter}
+                  <button
+                    type="button"
+                    onClick={() => handleCategory("All")}
+                    className="p-0.5 hover:bg-blue-200 dark:hover:bg-blue-800/60 rounded-full transition-colors cursor-pointer"
+                    title="Remove role filter"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {statusFilter !== "All" && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                  Status: {statusFilter}
+                  <button
+                    type="button"
+                    onClick={() => handleStatus("All")}
+                    className="p-0.5 hover:bg-indigo-200 dark:hover:bg-indigo-800/60 rounded-full transition-colors cursor-pointer"
+                    title="Remove status filter"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {expFilter !== "All" && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  Exp: {expFilter} Yrs
+                  <button
+                    type="button"
+                    onClick={() => handleExp("All")}
+                    className="p-0.5 hover:bg-emerald-200 dark:hover:bg-emerald-800/60 rounded-full transition-colors cursor-pointer"
+                    title="Remove experience filter"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {genderFilter !== "All" && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                  Gender: {genderFilter}
+                  <button
+                    type="button"
+                    onClick={() => handleGender("All")}
+                    className="p-0.5 hover:bg-purple-200 dark:hover:bg-purple-800/60 rounded-full transition-colors cursor-pointer"
+                    title="Remove gender filter"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {searchQuery.trim() !== "" && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                  Search: "{searchQuery}"
+                  <button
+                    type="button"
+                    onClick={() => handleSearch("")}
+                    className="p-0.5 hover:bg-amber-200 dark:hover:bg-amber-800/60 rounded-full transition-colors cursor-pointer"
+                    title="Clear search"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleResetAllFilters}
+                className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline ml-1 cursor-pointer"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="overflow-y-auto overflow-x-auto flex-1 w-full">
@@ -435,8 +629,8 @@ export default function CandidateTable({ candidates, onRefresh }: CandidateTable
                   const agentIdStr = cand.assigned_agent_id ? String(cand.assigned_agent_id) : null;
                   const staffIdStr = cand.assigned_staff_id ? String(cand.assigned_staff_id) : null;
 
-                  const agentName = agentIdStr ? (agentsMap[agentIdStr] ?? null) : null;
-                  const staffEmail = staffIdStr ? (staffMap[staffIdStr] ?? null) : null;
+                  const agentName  = agentIdStr ? (agentsMap[agentIdStr] ?? null) : null;
+                  const staffEmail = staffIdStr ? (staffMap[staffIdStr]  ?? null) : null;
 
                   return (
                     <tr
