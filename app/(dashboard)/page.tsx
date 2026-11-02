@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   FileText, Users, Clock, Calendar, Search, Activity, BarChart3, Plus, Loader2,
   Brain, Briefcase, Zap, CheckCircle2, Shield, UserCheck
@@ -11,6 +11,7 @@ import CandidateTable, { Candidate } from "@/components/CandidateTable";
 import { getDashboardData } from "@/app/actions";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Link from "next/link";
+import { useSearchParams, usePathname } from "next/navigation";
 
 type Agent = {
   id: string;
@@ -20,11 +21,15 @@ type Agent = {
 };
 
 export default function DashboardPage() {
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   const [isUploaderOpen, setIsUploaderOpen] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
+  // Initialise from URL so back-navigation restores the search
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") || "");
 
   const [metrics, setMetrics] = useState({
     docsPending: 0,
@@ -71,6 +76,15 @@ export default function DashboardPage() {
     }
   };
 
+  // Keep URL in sync when search changes (replaceState keeps back-nav working)
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    const params = new URLSearchParams();
+    if (value) params.set("q", value);
+    const newURL = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    window.history.replaceState(null, "", newURL);
+  }, [pathname]);
+
   const filteredCandidates = useMemo(() => {
     if (!searchQuery.trim()) return candidates;
     const query = searchQuery.toLowerCase();
@@ -115,7 +129,7 @@ export default function DashboardPage() {
               type="text"
               placeholder="Quick search..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border border-transparent rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
           </div>

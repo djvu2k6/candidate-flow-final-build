@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useState, useCallback } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Users, Download, CheckSquare, Square, Loader2, Filter, AlertTriangle, Trash2 } from "lucide-react";
 import { logAction } from "@/lib/audit";
 import { getCurrentProfile, getCandidatesList, bulkDeleteCandidates } from "@/app/actions";
@@ -65,6 +65,8 @@ const calculatePassportTimeLeft = (expiryDateStr?: string) => {
 
 export default function CandidateSectionPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const pathname = usePathname();
 
     const [candidates, setCandidates] = useState<any[]>([]);
     const [jobCategories, setJobCategories] = useState<any[]>([]);
@@ -73,15 +75,35 @@ export default function CandidateSectionPage() {
     // Role State for Admin Permissions
     const [currentUserRole, setCurrentUserRole] = useState<string>("staff");
 
-    // Search & Filter States
-    const [searchQuery, setSearchQuery] = useState("");
-    const [selectedJobFilter, setSelectedJobFilter] = useState("");
-    const [selectedStatusFilter, setSelectedStatusFilter] = useState("");
-    const [selectedAgentFilter, setSelectedAgentFilter] = useState("");
+    // Search & Filter States — initialised from URL query params so back-nav restores them
+    const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") || "");
+    const [selectedJobFilter, setSelectedJobFilter] = useState(() => searchParams.get("job") || "");
 
     // State for the Job Category search input & dropdown toggle
     const [jobSearchQuery, setJobSearchQuery] = useState("");
     const [isJobDropdownOpen, setIsJobDropdownOpen] = useState(false);
+
+    // Multi-Select State
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    // Keep URL in sync whenever filters change (replaces history entry so back still works)
+    const updateURL = useCallback((q: string, job: string) => {
+        const params = new URLSearchParams();
+        if (q) params.set("q", q);
+        if (job) params.set("job", job);
+        const newURL = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+        window.history.replaceState(null, "", newURL);
+    }, [pathname]);
+
+    const handleSearchChange = (value: string) => {
+        setSearchQuery(value);
+        updateURL(value, selectedJobFilter);
+    };
+
+    const handleJobFilterChange = (value: string) => {
+        setSelectedJobFilter(value);
+        updateURL(searchQuery, value);
+    };
 
     // Filter & sort job categories list based on user typing in the dropdown search
     // Priority: categories starting with the typed query come first, followed by categories containing it, then alphabetically sorted
@@ -96,8 +118,6 @@ export default function CandidateSectionPage() {
             if (!aStartsWith && bStartsWith) return 1;
             return (a.name || "").localeCompare(b.name || "");
         });
-    // Multi-Select State
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     const fetchData = async () => {
         setLoading(true);
@@ -256,13 +276,13 @@ export default function CandidateSectionPage() {
                             type="text"
                             placeholder="Search names or passports..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(e) => handleSearchChange(e.target.value)}
                             className="w-full pl-10 pr-10 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-600 text-sm text-slate-900 dark:text-white"
                         />
                         {/* Quick Clear Button for Main Search */}
                         {searchQuery && (
                             <button
-                                onClick={() => setSearchQuery("")}
+                                onClick={() => handleSearchChange("")}
                                 className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                             >
                                 <X className="w-5 h-5" />
@@ -314,7 +334,7 @@ export default function CandidateSectionPage() {
                                             {/* Option to clear job filter */}
                                             <button
                                                 onClick={() => {
-                                                    setSelectedJobFilter("");
+                                                    handleJobFilterChange("");
                                                     setIsJobDropdownOpen(false);
                                                     setJobSearchQuery("");
                                                 }}
@@ -333,7 +353,7 @@ export default function CandidateSectionPage() {
                                                     <button
                                                         key={cat.id || cat.name}
                                                         onClick={() => {
-                                                            setSelectedJobFilter(cat.name);
+                                                            handleJobFilterChange(cat.name);
                                                             setIsJobDropdownOpen(false);
                                                             setJobSearchQuery("");
                                                         }}
