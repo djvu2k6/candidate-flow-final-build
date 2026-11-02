@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import {
   FileText, Users, Clock, Calendar, Search, Activity, BarChart3, Plus, Loader2,
   Brain, Briefcase, Zap, CheckCircle2, Shield, UserCheck
@@ -21,6 +21,21 @@ type Agent = {
 };
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-blue-600 dark:text-blue-500" />
+          <p className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-xs">Syncing Vault Data...</p>
+        </div>
+      </div>
+    }>
+      <DashboardInner />
+    </Suspense>
+  );
+}
+
+function DashboardInner() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
 

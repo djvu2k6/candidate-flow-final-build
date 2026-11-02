@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Users, Download, CheckSquare, Square, Loader2, Filter, AlertTriangle, Trash2 } from "lucide-react";
 import { logAction } from "@/lib/audit";
@@ -64,6 +64,14 @@ const calculatePassportTimeLeft = (expiryDateStr?: string) => {
 };
 
 export default function CandidateSectionPage() {
+    return (
+        <Suspense fallback={<div className="flex items-center justify-center h-screen"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>}>
+            <CandidateSectionInner />
+        </Suspense>
+    );
+}
+
+function CandidateSectionInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const pathname = usePathname();
